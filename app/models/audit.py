@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, DateTime, Text, JSON
+from sqlalchemy import Column, String, Boolean, DateTime, Text, JSON
 from app.core.database import Base
 
 
@@ -16,3 +16,5 @@ class AuditLog(Base):
     details = Column(JSON, nullable=True, default=dict)
     ip_address = Column(String(50), nullable=True, default="127.0.0.1")
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    is_deleted = Column(Boolean, default=False, nullable=False)

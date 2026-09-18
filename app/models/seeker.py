@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, JSON
+from sqlalchemy import Column, String, Integer, Boolean, DateTime, ForeignKey, JSON, Text
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -18,14 +18,40 @@ class SeekerProfile(Base):
     languages = Column(JSON, nullable=True, default=list)
     education = Column(JSON, nullable=True, default=list)
     experience = Column(JSON, nullable=True, default=list)
+
+    # Resume metadata (lightweight; binary blob is in SeekerResume table)
     resume_file_name = Column(String(255), nullable=True, default="")
-    resume_url = Column(String(500), nullable=True, default="")
+    resume_mime_type = Column(String(100), nullable=True, default="")
     resume_size = Column(Integer, nullable=True, default=0)
     resume_uploaded_at = Column(DateTime, nullable=True)
+
+    # Profile photo stored as base64 data-URL
+    photo_data_url = Column(Text, nullable=True, default="")
+    photo_mime_type = Column(String(100), nullable=True, default="")
+
     preferences = Column(JSON, nullable=True, default=dict)
     privacy_settings = Column(JSON, nullable=True, default=dict)
+    is_active = Column(Boolean, default=True, nullable=False)
+    is_deleted = Column(Boolean, default=False, nullable=False)
 
     user = relationship("User", back_populates="seeker_profile")
+    # one-to-one resume blob
+    resume_blob = relationship("SeekerResume", back_populates="seeker_profile", uselist=False, cascade="all, delete-orphan")
+
+
+class SeekerResume(Base):
+    """Separate table to store resume binary data (base64) away from hot profile columns."""
+    __tablename__ = "seeker_resumes"
+
+    user_id = Column(String(36), ForeignKey("seeker_profiles.user_id", ondelete="CASCADE"), primary_key=True)
+    # Full base64-encoded file content (data-URL format: "data:<mime>;base64,<data>")
+    base64_data = Column(Text, nullable=False, default="")
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    is_deleted = Column(Boolean, default=False, nullable=False)
+
+    seeker_profile = relationship("SeekerProfile", back_populates="resume_blob")
 
 
 class SavedJob(Base):
@@ -35,3 +61,5 @@ class SavedJob(Base):
     user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     job_id = Column(String(36), ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    is_deleted = Column(Boolean, default=False, nullable=False)

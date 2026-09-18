@@ -17,6 +17,8 @@ class User(Base):
     status = Column(SQLEnum(UserStatus), nullable=False, default=UserStatus.ACTIVE)
     email_verified = Column(Boolean, default=False, nullable=False)
     two_factor_enabled = Column(Boolean, default=True, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    is_deleted = Column(Boolean, default=False, nullable=False)
     company_id = Column(String(36), ForeignKey("companies.id", ondelete="SET NULL"), nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

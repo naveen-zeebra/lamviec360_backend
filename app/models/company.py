@@ -24,6 +24,8 @@ class Company(Base):
     suspend_reason = Column(Text, nullable=True)
     plan_id = Column(String(50), default="Freemium", nullable=False)
     settings = Column(JSON, nullable=True, default=dict)
+    is_active = Column(Boolean, default=True, nullable=False)
+    is_deleted = Column(Boolean, default=False, nullable=False)
 
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
@@ -46,5 +48,7 @@ class CompanyInvitation(Base):
     status = Column(String(50), default="Pending", nullable=False)
     sent_date = Column(DateTime, default=datetime.utcnow, nullable=False)
     expiry = Column(DateTime, default=lambda: datetime.utcnow() + timedelta(days=7), nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    is_deleted = Column(Boolean, default=False, nullable=False)
 
     company = relationship("Company", back_populates="invitations")

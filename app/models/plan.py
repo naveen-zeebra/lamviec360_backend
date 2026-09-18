@@ -15,3 +15,6 @@ class SubscriptionPlan(Base):
     blurb = Column(String(255), nullable=True, default="")
     features = Column(JSON, nullable=True, default=list)
     active = Column(Boolean, default=True, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    is_deleted = Column(Boolean, default=False, nullable=False)
+

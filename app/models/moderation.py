@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, DateTime, Text, Enum as SQLEnum, JSON
+from sqlalchemy import Column, String, Boolean, DateTime, Text, Enum as SQLEnum, JSON
 from app.core.database import Base
 from app.models.enums import ModerationType, ModerationStatus
 
@@ -20,3 +20,6 @@ class ModerationItem(Base):
     flagged_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     resolved_at = Column(DateTime, nullable=True)
     resolution_notes = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+    is_deleted = Column(Boolean, default=False, nullable=False)
+

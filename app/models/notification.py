@@ -16,6 +16,9 @@ class Notification(Base):
     message = Column(Text, nullable=False)
     application_id = Column(String(36), nullable=True)
     read = Column(Boolean, default=False, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    is_deleted = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
 
     recipient = relationship("User", back_populates="notifications")

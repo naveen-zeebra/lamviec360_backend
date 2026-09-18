@@ -28,6 +28,8 @@ class Job(Base):
     documents = Column(JSON, nullable=True, default=lambda: ["CV / Resume"])
     status = Column(SQLEnum(JobStatus), nullable=False, default=JobStatus.DRAFT, index=True)
     ai_generated = Column(Boolean, default=False, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    is_deleted = Column(Boolean, default=False, nullable=False)
 
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)

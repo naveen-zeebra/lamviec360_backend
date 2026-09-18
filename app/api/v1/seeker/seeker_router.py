@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.api.deps import get_current_seeker
 from app.models.user import User
-from app.models.seeker import SeekerProfile, SavedJob
+from app.models.seeker import SeekerProfile, SeekerResume, SavedJob
 from app.models.job import Job
 from app.models.application import Application, ApplicationTimeline
 from app.models.interview import Interview
@@ -14,6 +14,7 @@ from app.models.enums import ApplicationStage, InterviewStatus, NotificationType
 from app.schemas.seeker import SeekerProfileUpdate, ResumeUploadRequest, SeekerProfileOut
 from app.schemas.application import ApplicationApplyRequest
 from app.schemas.interview import InterviewRespondRequest, InterviewOut
+from app.schemas.job import JobOut
 from app.schemas.common import MessageResponse
 
 router = APIRouter(prefix="/seeker", tags=["Job Seeker Workspace"])
@@ -48,7 +49,12 @@ def get_seeker_profile(current_user: User = Depends(get_current_seeker), db: Ses
 
     return SeekerProfileOut(
         user_id=current_user.id,
-        personal={"fullName": current_user.name, "phone": p.phone or "", "location": p.location or ""},
+        personal={
+            "fullName": current_user.name,
+            "phone": p.phone or "",
+            "location": p.location or "",
+            "photo": p.photo_data_url or "",
+        },
         professional={"title": p.title or "", "experience": p.experience_years or "", "industry": p.industry or "", "skills": p.skills or []},
         languages=p.languages or [],
         education=p.education or [],
@@ -56,8 +62,10 @@ def get_seeker_profile(current_user: User = Depends(get_current_seeker), db: Ses
         resume={
             "fileName": p.resume_file_name or "",
             "size": p.resume_size or 0,
+            "mimeType": p.resume_mime_type or "",
             "uploadedAt": p.resume_uploaded_at.strftime("%Y-%m-%d") if p.resume_uploaded_at else "",
-            "dataUrl": p.resume_url or "",
+            # base64 data is fetched separately via GET /seeker/resume/download to keep profile response lightweight
+            "dataUrl": "",
         },
         preferences=p.preferences or {"roles": [], "locations": [], "workMode": "", "salary": ""},
         completeness=compute_completeness(p, current_user),
@@ -79,6 +87,18 @@ def update_seeker_profile(req: SeekerProfileUpdate, current_user: User = Depends
             p.phone = req.personal["phone"]
         if "location" in req.personal:
             p.location = req.personal["location"]
+        # Profile photo stored as base64 data-URL
+        if "photo" in req.personal and req.personal["photo"]:
+            data_url = req.personal["photo"]
+            # extract mime type from "data:<mime>;base64,..."
+            mime = "image/jpeg"
+            if data_url.startswith("data:"):
+                try:
+                    mime = data_url.split(";")[0].split(":")[1]
+                except Exception:
+                    pass
+            p.photo_data_url = data_url
+            p.photo_mime_type = mime
 
     if req.professional:
         if "title" in req.professional:
@@ -107,24 +127,72 @@ def update_seeker_profile(req: SeekerProfileUpdate, current_user: User = Depends
 
 @router.post("/resume", response_model=MessageResponse)
 def save_seeker_resume(req: ResumeUploadRequest, current_user: User = Depends(get_current_seeker), db: Session = Depends(get_db)):
-    """Attaches or updates the Job Seeker's CV/Resume document."""
+    """Stores resume metadata in seeker_profiles and base64 blob in seeker_resumes table."""
     p = current_user.seeker_profile
+    if not p:
+        p = SeekerProfile(user_id=current_user.id)
+        db.add(p)
+        db.flush()
+
+    # Extract mime type from data-URL prefix
+    mime = req.mime_type or "application/octet-stream"
+    if req.data_url and req.data_url.startswith("data:"):
+        try:
+            mime = req.data_url.split(";")[0].split(":")[1]
+        except Exception:
+            pass
+
+    # Update metadata in profile
     p.resume_file_name = req.file_name
     p.resume_size = req.size
-    p.resume_url = req.data_url or ""
+    p.resume_mime_type = mime
     p.resume_uploaded_at = datetime.utcnow()
+
+    # Upsert binary blob in separate table
+    if req.data_url:
+        blob = db.query(SeekerResume).filter(SeekerResume.user_id == current_user.id).first()
+        if blob:
+            blob.base64_data = req.data_url
+            blob.updated_at = datetime.utcnow()
+        else:
+            blob = SeekerResume(user_id=current_user.id, base64_data=req.data_url)
+            db.add(blob)
+
     db.commit()
     return MessageResponse(success=True, message="Resume saved successfully.")
 
 
+@router.get("/resume/download", response_model=MessageResponse)
+def download_seeker_resume(current_user: User = Depends(get_current_seeker), db: Session = Depends(get_db)):
+    """Returns the base64 resume blob for the authenticated seeker."""
+    blob = db.query(SeekerResume).filter(SeekerResume.user_id == current_user.id).first()
+    if not blob or not blob.base64_data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No resume uploaded yet.")
+    p = current_user.seeker_profile
+    return MessageResponse(
+        success=True,
+        message="Resume data retrieved.",
+        data={
+            "fileName": p.resume_file_name if p else "",
+            "mimeType": p.resume_mime_type if p else "",
+            "size": p.resume_size if p else 0,
+            "dataUrl": blob.base64_data,
+        },
+    )
+
+
 @router.delete("/resume", response_model=MessageResponse)
 def remove_seeker_resume(current_user: User = Depends(get_current_seeker), db: Session = Depends(get_db)):
-    """Deletes the seeker's current resume."""
+    """Deletes the seeker's current resume metadata and binary blob."""
     p = current_user.seeker_profile
-    p.resume_file_name = ""
-    p.resume_size = 0
-    p.resume_url = ""
-    p.resume_uploaded_at = None
+    if p:
+        p.resume_file_name = ""
+        p.resume_size = 0
+        p.resume_mime_type = ""
+        p.resume_uploaded_at = None
+    blob = db.query(SeekerResume).filter(SeekerResume.user_id == current_user.id).first()
+    if blob:
+        db.delete(blob)
     db.commit()
     return MessageResponse(success=True, message="Resume removed.")
 
@@ -235,11 +303,16 @@ def withdraw_application(id: str, current_user: User = Depends(get_current_seeke
     return MessageResponse(success=True, message="Application withdrawn.")
 
 
-@router.get("/saved-jobs", response_model=List[str])
+@router.get("/saved-jobs", response_model=List[JobOut])
 def list_saved_jobs(current_user: User = Depends(get_current_seeker), db: Session = Depends(get_db)):
-    """Returns list of job IDs bookmarked by the seeker."""
-    saved = db.query(SavedJob.job_id).filter(SavedJob.user_id == current_user.id).all()
-    return [s[0] for s in saved]
+    """Returns list of jobs bookmarked by the seeker."""
+    jobs = (
+        db.query(Job)
+        .join(SavedJob, Job.id == SavedJob.job_id)
+        .filter(SavedJob.user_id == current_user.id)
+        .all()
+    )
+    return jobs
 
 
 @router.post("/saved-jobs/{id}/toggle", response_model=MessageResponse)

@@ -46,17 +46,39 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 3. Run Development Server
+### 3. Database Migrations (Alembic)
+
+Alembic manages schema migrations for both PostgreSQL and SQLite.
+
+```bash
+# Apply all pending migrations to head
+alembic upgrade head
+
+# Generate a new auto-detected migration after model changes
+alembic revision --autogenerate -m "describe_changes"
+
+# Check current migration revision
+alembic current
+
+# Check if there is any unmigrated schema drift
+alembic check
+
+# Rollback one migration
+alembic downgrade -1
+```
+
+### 4. Run Development Server
 ```bash
 uvicorn app.main:app --reload --port 8000
 ```
 
 > **Note:** On startup, the server will automatically initialize the database schema and seed the initial Super Admin, plans, demo companies, jobs, and candidates.
 
-### 4. Interactive Documentation (Swagger UI)
+### 5. Interactive Documentation (Swagger UI)
 Open your browser to:
 - **Swagger UI**: [http://localhost:8000/docs](http://localhost:8000/docs)
 - **ReDoc**: [http://localhost:8000/redoc](http://localhost:8000/redoc)
+
 
 ## Default Seed Accounts (for Testing)
 

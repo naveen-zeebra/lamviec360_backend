@@ -16,7 +16,8 @@ class SeekerProfileUpdate(BaseModel):
 class ResumeUploadRequest(BaseModel):
     file_name: str
     size: int
-    data_url: Optional[str] = None
+    mime_type: Optional[str] = None
+    data_url: Optional[str] = None  # full base64 data-URL string
 
 
 class SeekerProfileOut(BaseModel):

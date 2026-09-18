@@ -13,7 +13,7 @@ from app.models.enums import (
 )
 from app.models.user import User
 from app.models.company import Company, CompanyInvitation
-from app.models.seeker import SeekerProfile, SavedJob
+from app.models.seeker import SeekerProfile, SeekerResume, SavedJob
 from app.models.job import Job
 from app.models.application import Application, ApplicationNote, ApplicationTimeline
 from app.models.interview import Interview
@@ -38,6 +38,7 @@ __all__ = [
     "Company",
     "CompanyInvitation",
     "SeekerProfile",
+    "SeekerResume",
     "SavedJob",
     "Job",
     "Application",

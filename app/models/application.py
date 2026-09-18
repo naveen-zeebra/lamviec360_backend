@@ -23,6 +23,8 @@ class Application(Base):
     rejected_at = Column(DateTime, nullable=True)
     applied_date = Column(DateTime, default=datetime.utcnow, nullable=False)
     closed = Column(Boolean, default=False, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    is_deleted = Column(Boolean, default=False, nullable=False)
 
     # Relationships
     job = relationship("Job", back_populates="applications")
@@ -40,6 +42,8 @@ class ApplicationNote(Base):
     author = Column(String(255), nullable=False)
     text = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    is_deleted = Column(Boolean, default=False, nullable=False)
 
     application = relationship("Application", back_populates="notes")
 
@@ -51,5 +55,7 @@ class ApplicationTimeline(Base):
     application_id = Column(String(36), ForeignKey("applications.id", ondelete="CASCADE"), nullable=False, index=True)
     stage = Column(SQLEnum(ApplicationStage), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    is_deleted = Column(Boolean, default=False, nullable=False)
 
     application = relationship("Application", back_populates="timeline")
