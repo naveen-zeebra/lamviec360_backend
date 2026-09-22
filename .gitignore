@@ -1,13 +1,31 @@
-# Byte-compiled / optimized / DLL files
+# ==============================================================================
+# Git Ignore for FastAPI / Python Backend (LamViec360)
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. Byte-compiled / optimized / DLL files
+# ------------------------------------------------------------------------------
 __pycache__/
 *.py[cod]
 *$py.class
-
-# C extensions
 *.so
-
-# Distribution / packaging
 .Python
+
+# ------------------------------------------------------------------------------
+# 2. Virtual Environments
+# ------------------------------------------------------------------------------
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.conda/
+.env/
+
+# ------------------------------------------------------------------------------
+# 3. Distribution / Packaging
+# ------------------------------------------------------------------------------
 build/
 develop-eggs/
 dist/
@@ -25,28 +43,72 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+pip-wheel-metadata/
+.pdm-build/
 
-# Virtual environments
-venv/
-.venv/
-env/
-ENV/
-env.bak/
-venv.bak/
-
-# Environment variables & secrets
+# ------------------------------------------------------------------------------
+# 4. Environment Variables & Secrets (CRITICAL)
+# ------------------------------------------------------------------------------
 .env
-.env.local
-.env.*.local
+.env.*
 !.env.example
+!.env.sample
+!.env.template
 
-# Local SQLite databases
+# Private keys, certificates, and credentials
+*.pem
+*.key
+*.cert
+*.crt
+*.pfx
+*.p12
+id_rsa*
+id_ed25519*
+credentials.json
+client_secret*.json
+serviceAccountKey*.json
+
+# ------------------------------------------------------------------------------
+# 5. Databases & Storage
+# ------------------------------------------------------------------------------
 *.db
+*.db-journal
+*.db-shm
+*.db-wal
 *.sqlite
 *.sqlite3
+jobportal.db
 lamviec360.db
+dump.rdb
+*.sql.gz
+*.sql.bak
+*.dump
 
-# Unit test / coverage reports
+# ------------------------------------------------------------------------------
+# 6. Uploads & Generated Media
+# ------------------------------------------------------------------------------
+uploads/
+!uploads/.gitkeep
+media/
+!media/.gitkeep
+storage/
+!storage/.gitkeep
+
+# ------------------------------------------------------------------------------
+# 7. Logs & Diagnostics
+# ------------------------------------------------------------------------------
+*.log
+*.log.*
+logs/
+!logs/.gitkeep
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ------------------------------------------------------------------------------
+# 8. Unit Tests, Coverage & Linters
+# ------------------------------------------------------------------------------
 .pytest_cache/
 .coverage
 .coverage.*
@@ -56,23 +118,74 @@ coverage.xml
 *.cover
 *.py,cover
 htmlcov/
+.tox/
+.nox/
+.hypothesis/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.ruff_cache/
+.pyre/
+.pytype/
 
-# Editor / IDE directories & files
+# ------------------------------------------------------------------------------
+# 9. Process Managers & PIDs (PM2, Celery, etc.)
+# ------------------------------------------------------------------------------
+.pm2/
+pids/
+*.pid
+*.seed
+*.pid.lock
+celerybeat-schedule*
+celerybeat.pid
+
+# ------------------------------------------------------------------------------
+# 10. Node / JavaScript tooling (for PM2 / scripts)
+# ------------------------------------------------------------------------------
+node_modules/
+
+# ------------------------------------------------------------------------------
+# 11. Editor & IDE configurations
+# ------------------------------------------------------------------------------
 .idea/
 .vscode/
+!.vscode/extensions.json
+!.vscode/launch.json.example
 *.swp
 *.swo
 *~
+*.sublime-project
+*.sublime-workspace
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
 
-# OS generated files
+# ------------------------------------------------------------------------------
+# 12. Operating System Files
+# ------------------------------------------------------------------------------
+# macOS
 .DS_Store
 .DS_Store?
 ._*
 .Spotlight-V100
 .Trashes
-ehthumbs.db
-Thumbs.db
+Icon?
 
-# Logs
-*.log
-logs/
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# Linux
+.directory
+
+# ------------------------------------------------------------------------------
+# 13. Temporary & Scratch Files
+# ------------------------------------------------------------------------------
+tmp/
+temp/
+scratch/
+.ipynb_checkpoints/
