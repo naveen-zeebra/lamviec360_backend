@@ -6,6 +6,8 @@ from sqlalchemy import desc
 from shared.database.session import get_db
 from shared.models import User, CompanyProfile, JobPosting, JobApplication, JobSeekerProfile
 from shared.schemas import ApplicationStatusUpdate, PaginatedResponse, APIResponse
+from pydantic import BaseModel
+from typing import List, Optional
 from shared.utils import (
     get_current_user,
     require_user_type,
@@ -167,3 +169,87 @@ def update_applicant_status(
         data={"id": app.id, "status": app.status, "rating": app.rating},
         message="Applicant status updated successfully",
     )
+
+class BulkStageRequest(BaseModel):
+    application_ids: List[int]
+    status: str
+    rejection_template_id: Optional[int] = None
+    rejection_note: Optional[str] = None
+
+@router.post("/bulk-stage", response_model=APIResponse[dict])
+def bulk_update_applicant_status(
+    data: BulkStageRequest,
+    user: User = Depends(require_user_type("company", "super_admin")),
+    db: Session = Depends(get_db),
+):
+    profile = user.company_profile
+    apps = (
+        db.query(JobApplication)
+        .join(JobPosting, JobApplication.job_id == JobPosting.id)
+        .filter(JobApplication.id.in_(data.application_ids), JobPosting.company_id == profile.id if profile else False)
+        .all()
+    )
+    for app in apps:
+        app.status = data.status
+        if data.rejection_note:
+            app.recruiter_notes = data.rejection_note
+    db.commit()
+    return success_response(message=f"Bulk updated {len(apps)} applicants to {data.status}")
+
+class CandidateNoteRequest(BaseModel):
+    text: str
+
+@router.post("/{application_id}/notes", response_model=APIResponse[dict])
+def add_candidate_note(
+    application_id: int,
+    data: CandidateNoteRequest,
+    user: User = Depends(require_user_type("company", "super_admin")),
+    db: Session = Depends(get_db),
+):
+    profile = user.company_profile
+    app = (
+        db.query(JobApplication)
+        .join(JobPosting, JobApplication.job_id == JobPosting.id)
+        .filter(JobApplication.id == application_id, JobPosting.company_id == profile.id if profile else False)
+        .first()
+    )
+    if not app:
+        raise HTTPException(status_code=404, detail="Applicant record not found")
+    
+    app.recruiter_notes = data.text
+    db.commit()
+    return success_response(message="Note added successfully")
+
+class ScheduleInterviewRequest(BaseModel):
+    round_name: str
+    scheduled_at: str
+    duration_min: int
+    mode: str
+    location_or_link: str
+    instructions: str
+    interviewers: List[str]
+    documents: List[str]
+
+@router.post("/{application_id}/schedule-interview", response_model=APIResponse[dict])
+def schedule_candidate_interview(
+    application_id: int,
+    data: ScheduleInterviewRequest,
+    user: User = Depends(require_user_type("company", "super_admin")),
+    db: Session = Depends(get_db),
+):
+    profile = user.company_profile
+    app = (
+        db.query(JobApplication)
+        .join(JobPosting, JobApplication.job_id == JobPosting.id)
+        .filter(JobApplication.id == application_id, JobPosting.company_id == profile.id if profile else False)
+        .first()
+    )
+    if not app:
+        raise HTTPException(status_code=404, detail="Applicant record not found")
+    
+    app.status = "interviewing"
+    db.commit()
+    
+    return success_response(message="Interview scheduled successfully")
+
+

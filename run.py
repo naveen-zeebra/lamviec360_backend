@@ -65,7 +65,8 @@ def main():
     print("\n[2/2] Launching 3 Gateway Servers concurrently...")
     processes = []
     
-    python_exe = sys.executable
+    venv_py = BASE_DIR / ".venv" / "Scripts" / "python.exe"
+    python_exe = str(venv_py) if venv_py.exists() else sys.executable
 
     try:
         for s in SERVICES:

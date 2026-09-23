@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 
+from datetime import datetime
 from shared.database.session import get_db
-from shared.models import User
+from shared.models import User, AdminUser
 from shared.schemas import (
     LoginRequest,
     RefreshTokenRequest,
@@ -26,6 +27,68 @@ router = APIRouter(prefix="/auth", tags=["Admin Auth"])
 
 @router.post("/login", response_model=APIResponse[dict])
 def admin_login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
+    # 1. Check dedicated AdminUser table first
+    admin = db.query(AdminUser).filter(AdminUser.email == req.email.lower(), AdminUser.is_deleted == False).first()
+    if admin and verify_password(req.password, admin.password_hash):
+        if not admin.is_active:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin account is inactive")
+
+        role_code = admin.role_rel.code if admin.role_rel else "super_admin"
+        permissions = []
+        if admin.role_rel:
+            for p in admin.role_rel.permissions:
+                actions = []
+                if p.can_view: actions.append("view")
+                if p.can_create: actions.append("create")
+                if p.can_edit: actions.append("edit")
+                if p.can_delete: actions.append("delete")
+                permissions.append(f"{p.module_key.lower()}:{','.join(actions)}")
+
+        access_token = create_access_token(
+            user_id=admin.id,
+            email=admin.email,
+            user_type="super_admin" if "super" in role_code else "admin",
+            roles=[role_code],
+            permissions=permissions,
+        )
+        refresh_token = create_refresh_token(admin.id)
+        admin.last_login = datetime.utcnow()
+        db.commit()
+
+        log_audit_event(
+            db,
+            action="ADMIN_LOGIN",
+            module="ADMIN_AUTH",
+            description=f"Platform administrator logged in: {admin.email} ({admin.role_name})",
+            user_id=admin.id,
+            user_email=admin.email,
+            user_type="super_admin",
+            request=request,
+        )
+
+        return success_response(
+            data={
+                "access_token": access_token,
+                "refresh_token": refresh_token,
+                "token_type": "bearer",
+                "expires_in": 3600,
+                "user": {
+                    "id": str(admin.id),
+                    "email": admin.email,
+                    "first_name": admin.first_name,
+                    "last_name": admin.last_name,
+                    "name": admin.full_name,
+                    "full_name": admin.full_name,
+                    "role": admin.role_name,
+                    "roles": [role_code],
+                    "permissions": admin.permissions_dict,
+                    "avatar": admin.avatar_url,
+                },
+            },
+            message="Login successful",
+        )
+
+    # 2. Fallback check for legacy admin users in User table
     user = db.query(User).filter(User.email == req.email.lower()).first()
     if not user or not verify_password(req.password, user.hashed_password):
         raise HTTPException(
@@ -82,7 +145,7 @@ def admin_login(req: LoginRequest, request: Request, db: Session = Depends(get_d
             "token_type": "bearer",
             "expires_in": 3600,
             "user": {
-                "id": user.id,
+                "id": str(user.id),
                 "email": user.email,
                 "name": user.full_name,
                 "full_name": user.full_name,

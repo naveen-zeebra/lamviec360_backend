@@ -1,3 +1,4 @@
+from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 
@@ -8,8 +9,10 @@ from shared.schemas import (
     LoginRequest,
     RefreshTokenRequest,
     ChangePasswordRequest,
+    VerifyEmailRequest,
     APIResponse,
 )
+from pydantic import BaseModel, EmailStr, Field
 from shared.utils import (
     hash_password,
     verify_password,
@@ -23,8 +26,21 @@ from shared.utils import (
 
 router = APIRouter(prefix="/auth", tags=["Company Auth"])
 
+class CompanyRegisterRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(..., min_length=6)
+    company_name: str = Field(..., min_length=1, max_length=255)
+    contact_name: Optional[str] = None
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
+    industry: Optional[str] = None
+    size: Optional[str] = None
+    company_size: Optional[str] = None
+    website: Optional[str] = None
+    reg_number: Optional[str] = None
+
 @router.post("/register", response_model=APIResponse[dict])
-def register_company(req: RegisterRequest, request: Request, db: Session = Depends(get_db)):
+def register_company(req: CompanyRegisterRequest, request: Request, db: Session = Depends(get_db)):
     existing = db.query(User).filter(User.email == req.email.lower()).first()
     if existing:
         raise HTTPException(
@@ -32,14 +48,20 @@ def register_company(req: RegisterRequest, request: Request, db: Session = Depen
             detail="An account with this email already exists",
         )
     
-    company_name = req.company_name or req.full_name or "New Company"
+    contact_name = req.contact_name or req.full_name or req.company_name or "Representative"
+    parts = contact_name.strip().split(" ", 1)
+    first_name = parts[0]
+    last_name = parts[1] if len(parts) > 1 else ""
+    
+    company_name = req.company_name or "New Company"
     company_role = db.query(Role).filter(Role.code == "company").first()
     roles = [company_role] if company_role else []
     
     user = User(
         email=req.email.lower(),
         hashed_password=hash_password(req.password),
-        full_name=req.full_name,
+        first_name=first_name,
+        last_name=last_name,
         phone=req.phone,
         user_type="company",
         is_active=True,
@@ -53,6 +75,9 @@ def register_company(req: RegisterRequest, request: Request, db: Session = Depen
     profile = CompanyProfile(
         user_id=user.id,
         company_name=company_name,
+        industry=req.industry or "Technology",
+        company_size=req.size or req.company_size or "11-50",
+        website=req.website,
         verification_status="verified",  # Default verified in local dev setup
     )
     db.add(profile)
@@ -150,6 +175,114 @@ def login_company(req: LoginRequest, request: Request, db: Session = Depends(get
         },
         message="Login successful",
     )
+
+
+class LoginInitiateRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+class VerifyOtpRequest(BaseModel):
+    session_token: str
+    code: str
+
+@router.post("/login/initiate", response_model=APIResponse[dict])
+def initiate_otp_login(req: LoginInitiateRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == req.email.lower()).first()
+    if not user or not verify_password(req.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password",
+        )
+    # Mock OTP logic
+    return success_response(
+        data={"session_token": f"mock_session_{user.id}"},
+        message="OTP sent to email/phone"
+    )
+
+@router.post("/login/verify-otp", response_model=APIResponse[dict])
+def verify_otp_login(req: VerifyOtpRequest, request: Request, db: Session = Depends(get_db)):
+    # Mock OTP verification
+    if not req.session_token.startswith("mock_session_"):
+        raise HTTPException(status_code=400, detail="Invalid session token")
+    
+    if req.code != "1234":
+        raise HTTPException(status_code=400, detail="Invalid OTP")
+        
+    user_id = int(req.session_token.split("_")[-1])
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    roles = [r.code for r in user.roles]
+    access_token = create_access_token(
+        user_id=user.id,
+        email=user.email,
+        user_type=user.user_type,
+        roles=roles,
+    )
+    refresh_token = create_refresh_token(user.id)
+    
+    company_id = user.company_profile.id if user.company_profile else None
+    company_name = user.company_profile.company_name if user.company_profile else None
+
+    return success_response(
+        data={
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "bearer",
+            "user": {
+                "id": user.id,
+                "email": user.email,
+                "full_name": user.full_name,
+                "user_type": user.user_type,
+                "company_id": company_id,
+                "company_name": company_name,
+            },
+        },
+        message="OTP verified successfully",
+    )
+
+
+@router.post("/verify-email", response_model=APIResponse[dict])
+def verify_email(req: VerifyEmailRequest, db: Session = Depends(get_db)):
+    if not req.email:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email is required")
+    user = db.query(User).filter(User.email == req.email.lower()).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    user.is_verified = True
+    db.commit()
+    return success_response(message="Email verified successfully")
+
+class ActivateInviteRequest(BaseModel):
+    invite_token: str
+    name: str
+    password: str
+
+@router.get("/invite/{token}", response_model=APIResponse[dict])
+def get_invite_by_token(token: str, db: Session = Depends(get_db)):
+    # Mock implementation
+    return success_response(
+        data={
+            "email": "invited@example.com",
+            "role": "recruiter",
+            "company_name": "Sample Company"
+        }
+    )
+
+@router.post("/activate-invite", response_model=APIResponse[dict])
+def activate_team_invite(req: ActivateInviteRequest, db: Session = Depends(get_db)):
+    # Mock implementation
+    return success_response(
+        data={
+            "access_token": "mock_token",
+            "token_type": "bearer"
+        },
+        message="Team member account activated"
+    )
+
+
 
 
 @router.get("/me", response_model=APIResponse[dict])

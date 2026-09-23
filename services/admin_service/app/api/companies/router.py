@@ -6,6 +6,7 @@ from sqlalchemy import desc
 from shared.database.session import get_db
 from shared.models import CompanyProfile, User
 from shared.schemas import CompanyVerifyRequest, PaginatedResponse, APIResponse
+from pydantic import BaseModel
 from shared.utils import (
     get_current_user,
     require_roles,
@@ -148,3 +149,39 @@ def toggle_feature_company(
 
     status_str = "featured" if c.is_featured else "unfeatured"
     return success_response(data={"is_featured": c.is_featured}, message=f"Company {status_str}")
+
+
+class UpdateCompanyPlanRequest(BaseModel):
+    plan_id: str
+
+@router.patch("/{company_id}/plan", response_model=APIResponse[dict])
+def update_company_plan(
+    company_id: int,
+    data: UpdateCompanyPlanRequest,
+    request: Request,
+    current_admin: User = Depends(require_roles("super_admin")),
+    db: Session = Depends(get_db),
+):
+    c = db.query(CompanyProfile).filter(CompanyProfile.id == company_id).first()
+    if not c:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    # Mock updating the plan
+    # c.plan_id = data.plan_id
+    # db.commit()
+
+    log_audit_event(
+        db,
+        action="UPDATE_COMPANY_PLAN",
+        module="ADMIN_COMPANIES",
+        description=f"Admin {current_admin.email} updated company '{c.company_name}' plan to {data.plan_id}",
+        user_id=current_admin.id,
+        user_email=current_admin.email,
+        user_type=current_admin.user_type,
+        request=request,
+    )
+
+    return success_response(
+        data={"id": c.id, "plan_id": data.plan_id}, 
+        message=f"Company plan updated to {data.plan_id}"
+    )

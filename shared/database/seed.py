@@ -4,7 +4,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from sqlalchemy.orm import Session
 from shared.database.session import SessionLocal, init_db
-from shared.models import Role, RolePermission, User, CompanyProfile, JobSeekerProfile, JobPosting
+from shared.models import (
+    Role,
+    RolePermission,
+    User,
+    CompanyProfile,
+    JobSeekerProfile,
+    JobPosting,
+    AdminUser,
+    AdminRole,
+    AdminRolePermission,
+)
 from shared.utils.password import hash_password
 from shared.utils.logger import get_logger
 
@@ -58,23 +68,74 @@ def seed_database(db: Session = None):
                     db.add(perm)
         db.flush()
 
-        # 3. Seed Default Super Admin
-        admin_email = "admin@jobportal.com"
-        admin_user = db.query(User).filter_by(email=admin_email).first()
-        if not admin_user:
-            admin_user = User(
-                email=admin_email,
-                hashed_password=hash_password("Admin@123"),
-                full_name="Super Administrator",
-                user_type="super_admin",
-                is_superuser=True,
-                is_verified=True,
-                is_active=True,
-                roles=[role_map["super_admin"]],
-            )
-            db.add(admin_user)
-            db.flush()
-            logger.info("Created default super admin: admin@jobportal.com")
+        # 3. Seed Platform Admin Roles & Permissions for Super Admin Platform
+        admin_roles_data = [
+            ("Super Admin", "super_admin", "Complete platform root superuser access with all privileges"),
+            ("Operations Admin", "operations_admin", "Tenant moderation, job management, and operational workflows"),
+            ("Compliance Officer", "compliance_officer", "Platform compliance, legal review, and data governance"),
+            ("Billing Manager", "billing_manager", "Commercial plan management, billing tiers, and revenue oversight"),
+            ("Read-Only Auditor", "read_only_auditor", "Read-only access across all platform modules"),
+        ]
+        admin_modules = [
+            "DASHBOARD", "ANALYTICS", "TENANTS", "USERS", "COMMERCIAL",
+            "GOVERNANCE", "CONFIGURATION", "ADMIN_MANAGEMENT", "ACCOUNT"
+        ]
+
+        admin_role_map = {}
+        for name, code, desc in admin_roles_data:
+            arole = db.query(AdminRole).filter_by(code=code).first()
+            if not arole:
+                arole = AdminRole(name=name, code=code, description=desc, is_system=True)
+                db.add(arole)
+                db.flush()
+            admin_role_map[code] = arole
+
+            # Populate permissions
+            existing_admin_mods = {p.module_key for p in arole.permissions}
+            for amod in admin_modules:
+                if amod not in existing_admin_mods:
+                    if code == "super_admin":
+                        perm = AdminRolePermission(role_id=arole.id, module_key=amod, can_view=True, can_create=True, can_edit=True, can_delete=True)
+                    elif code == "operations_admin":
+                        can_write = amod in ["TENANTS", "USERS", "GOVERNANCE"]
+                        perm = AdminRolePermission(role_id=arole.id, module_key=amod, can_view=True, can_create=can_write, can_edit=can_write, can_delete=False)
+                    elif code == "compliance_officer":
+                        can_write = amod in ["GOVERNANCE", "TENANTS"]
+                        perm = AdminRolePermission(role_id=arole.id, module_key=amod, can_view=True, can_create=can_write, can_edit=can_write, can_delete=False)
+                    elif code == "billing_manager":
+                        can_write = amod in ["COMMERCIAL", "TENANTS"]
+                        perm = AdminRolePermission(role_id=arole.id, module_key=amod, can_view=True, can_create=can_write, can_edit=can_write, can_delete=False)
+                    else:  # read_only_auditor
+                        perm = AdminRolePermission(role_id=arole.id, module_key=amod, can_view=True, can_create=False, can_edit=False, can_delete=False)
+                    db.add(perm)
+        db.flush()
+
+        # 4. Seed Dedicated Platform Administrators into admin_users Table
+        super_admins_to_seed = [
+            ("superadmin@lamviec360.vn", "password123", "Nguyen", "Van An", "+84 901 234 567", "super_admin"),
+            ("admin@jobportal.com", "Admin@123", "Super", "Administrator", "+84 900 000 000", "super_admin"),
+            ("operations@lamviec360.vn", "password123", "Tran", "Thi Mai", "+84 912 345 678", "operations_admin"),
+            ("compliance@lamviec360.vn", "password123", "Le", "Hoang Nam", "+84 933 456 789", "compliance_officer"),
+            ("billing@lamviec360.vn", "password123", "Pham", "Minh Duc", "+84 944 567 890", "billing_manager"),
+        ]
+
+        for email, pwd, fname, lname, phone, rcode in super_admins_to_seed:
+            existing_adm = db.query(AdminUser).filter_by(email=email).first()
+            if not existing_adm:
+                role_obj = admin_role_map.get(rcode)
+                new_adm = AdminUser(
+                    email=email,
+                    password_hash=hash_password(pwd),
+                    first_name=fname,
+                    last_name=lname,
+                    phone=phone,
+                    role_id=role_obj.id if role_obj else None,
+                    role_name=role_obj.name if role_obj else "Super Admin",
+                    is_active=True,
+                )
+                db.add(new_adm)
+                db.flush()
+                logger.info(f"Created dedicated admin user: {email}")
 
         # 4. Seed Demo Company
         company_email = "company@techcorp.com"

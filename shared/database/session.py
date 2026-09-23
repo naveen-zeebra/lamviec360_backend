@@ -32,5 +32,5 @@ def get_db() -> Generator[Session, None, None]:
 def init_db() -> None:
     """Create all database tables if they do not exist."""
     # Import all models to ensure they are registered with Base.metadata
-    from shared.models import user, role, jobseeker, company, job, application, audit_log  # noqa: F401
+    from shared.models import user, role, jobseeker, company, job, application, audit_log, admin_user  # noqa: F401
     Base.metadata.create_all(bind=engine)

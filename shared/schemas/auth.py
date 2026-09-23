@@ -8,10 +8,14 @@ class LoginRequest(BaseModel):
 class RegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=6)
-    full_name: str = Field(..., min_length=2, max_length=100)
+    full_name: Optional[str] = Field(None, max_length=100)
+    contact_name: Optional[str] = None
     phone: Optional[str] = None
     user_type: str = Field(default="jobseeker")  # "jobseeker" or "company"
     company_name: Optional[str] = None  # if company registration
+    industry: Optional[str] = None
+    size: Optional[str] = None
+    website: Optional[str] = None
 
 class TokenResponse(BaseModel):
     access_token: str
