@@ -1,4 +1,6 @@
 from typing import Optional, List, Dict, Any
+import random
+from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 
@@ -10,6 +12,7 @@ from shared.schemas import (
     RefreshTokenRequest,
     ChangePasswordRequest,
     VerifyEmailRequest,
+    SendVerificationEmailRequest,
     APIResponse,
 )
 from pydantic import BaseModel, EmailStr, Field
@@ -20,11 +23,16 @@ from shared.utils import (
     create_refresh_token,
     decode_token,
     get_current_user,
+    get_current_active_user_optional,
+    send_verification_email,
     success_response,
     log_audit_event,
 )
 
 router = APIRouter(prefix="/auth", tags=["Company Auth"])
+
+# In-memory verification cache: email -> { "code": str, "expires_at": datetime }
+_VERIFICATION_CACHE: Dict[str, dict] = {}
 
 class CompanyRegisterRequest(BaseModel):
     email: EmailStr
@@ -65,7 +73,7 @@ def register_company(req: CompanyRegisterRequest, request: Request, db: Session 
         phone=req.phone,
         user_type="company",
         is_active=True,
-        is_verified=True,
+        is_verified=False,
         roles=roles,
     )
     db.add(user)
@@ -78,11 +86,19 @@ def register_company(req: CompanyRegisterRequest, request: Request, db: Session 
         industry=req.industry or "Technology",
         company_size=req.size or req.company_size or "11-50",
         website=req.website,
-        verification_status="verified",  # Default verified in local dev setup
+        verification_status="pending",
     )
     db.add(profile)
     db.commit()
     db.refresh(user)
+
+    # Generate and send 6-digit email verification code
+    code = f"{random.randint(100000, 999999)}"
+    _VERIFICATION_CACHE[user.email.lower()] = {
+        "code": code,
+        "expires_at": datetime.now(timezone.utc) + timedelta(minutes=15),
+    }
+    send_verification_email(to_email=user.email, code=code, name=contact_name)
 
     access_token = create_access_token(
         user_id=user.id,
@@ -193,10 +209,44 @@ def initiate_otp_login(req: LoginInitiateRequest, db: Session = Depends(get_db))
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
         )
+    
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your company account is inactive. Please contact administrator.",
+        )
+
+    if user.company_profile:
+        v_status = (user.company_profile.verification_status or "").lower()
+        if v_status == "pending":
+            return success_response(
+                data={
+                    "status": "PENDING_APPROVAL",
+                    "session_token": None,
+                },
+                message="Your company registration is pending approval.",
+            )
+        elif v_status == "rejected":
+            return success_response(
+                data={
+                    "status": "REJECTED",
+                    "session_token": None,
+                },
+                message="Your company registration was not approved.",
+            )
+
+    email = user.email
+    name, domain = email.split("@") if "@" in email else (email, "")
+    masked_email = f"{name[:1]}•••@{domain}" if domain else email
+
     # Mock OTP logic
     return success_response(
-        data={"session_token": f"mock_session_{user.id}"},
-        message="OTP sent to email/phone"
+        data={
+            "session_token": f"mock_session_{user.id}",
+            "status": "OTP_SENT",
+            "masked_email": masked_email,
+        },
+        message="OTP sent to email/phone",
     )
 
 @router.post("/login/verify-otp", response_model=APIResponse[dict])
@@ -205,13 +255,16 @@ def verify_otp_login(req: VerifyOtpRequest, request: Request, db: Session = Depe
     if not req.session_token.startswith("mock_session_"):
         raise HTTPException(status_code=400, detail="Invalid session token")
     
-    if req.code != "1234":
-        raise HTTPException(status_code=400, detail="Invalid OTP")
+    if req.code not in ["1234", "123456"]:
+        raise HTTPException(status_code=400, detail="Invalid OTP code. Please enter 123456.")
         
     user_id = int(req.session_token.split("_")[-1])
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+        
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Your company account is inactive. Please contact administrator.")
 
     roles = [r.code for r in user.roles]
     access_token = create_access_token(
@@ -243,17 +296,101 @@ def verify_otp_login(req: VerifyOtpRequest, request: Request, db: Session = Depe
     )
 
 
+@router.post("/send-verification-email", response_model=APIResponse[dict])
+@router.post("/resend-verification-email", response_model=APIResponse[dict])
+def send_company_verification_email_route(
+    req: SendVerificationEmailRequest = None,
+    current_user: Optional[User] = Depends(get_current_active_user_optional),
+    db: Session = Depends(get_db),
+):
+    target_email = ((req.email or "") if req else "").strip().lower()
+    if not target_email and current_user:
+        target_email = current_user.email.strip().lower()
+
+    if not target_email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email address is required to send verification code",
+        )
+
+    user = db.query(User).filter(User.email == target_email).first()
+    display_name = user.full_name if user else (current_user.full_name if current_user else "Employer")
+
+    code = f"{random.randint(100000, 999999)}"
+    _VERIFICATION_CACHE[target_email] = {
+        "code": code,
+        "expires_at": datetime.now(timezone.utc) + timedelta(minutes=15),
+    }
+
+    send_verification_email(to_email=target_email, code=code, name=display_name)
+
+    return success_response(
+        data={"email": target_email},
+        message="Verification code sent to your email",
+    )
+
+
 @router.post("/verify-email", response_model=APIResponse[dict])
-def verify_email(req: VerifyEmailRequest, db: Session = Depends(get_db)):
-    if not req.email:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email is required")
-    user = db.query(User).filter(User.email == req.email.lower()).first()
+def verify_email(
+    req: VerifyEmailRequest,
+    request: Request,
+    current_user: Optional[User] = Depends(get_current_active_user_optional),
+    db: Session = Depends(get_db),
+):
+    target_email = ((req.email or "") if req else "").strip().lower()
+    if not target_email and current_user:
+        target_email = current_user.email.strip().lower()
+
+    if not target_email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email address is required",
+        )
+
+    submitted_code = req.code.strip() if req.code else ""
+    cached = _VERIFICATION_CACHE.get(target_email)
+    now = datetime.now(timezone.utc)
+
+    # Valid if matches cached unexpired code or dev bypass code "123456" / "1234"
+    is_valid_otp = False
+    if submitted_code in ["123456", "1234"]:
+        is_valid_otp = True
+    elif cached and cached.get("code") == submitted_code and now <= cached.get("expires_at"):
+        is_valid_otp = True
+
+    if not is_valid_otp:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired verification code",
+        )
+
+    # Clear used OTP
+    if target_email in _VERIFICATION_CACHE:
+        del _VERIFICATION_CACHE[target_email]
+
+    user = db.query(User).filter(User.email == target_email).first()
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-        
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
     user.is_verified = True
     db.commit()
-    return success_response(message="Email verified successfully")
+    db.refresh(user)
+
+    log_audit_event(
+        db,
+        action="VERIFY_EMAIL",
+        module="COMPANY_AUTH",
+        description=f"Company verified email: {user.email}",
+        user_id=user.id,
+        user_email=user.email,
+        user_type=user.user_type,
+        request=request,
+    )
+
+    return success_response(
+        data={"email": target_email, "is_verified": True},
+        message="Email verified successfully",
+    )
 
 class ActivateInviteRequest(BaseModel):
     invite_token: str

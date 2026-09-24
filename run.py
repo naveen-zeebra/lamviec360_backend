@@ -55,6 +55,10 @@ def main():
     # Step 1: Pre-initialize database schema and demo seeds
     print("[1/2] Initializing Shared Database & Default Seeds...")
     try:
+        from create_postgres_db import create_database_if_not_exists
+        if "postgres" in env.DATABASE_URL:
+            create_database_if_not_exists()
+            
         init_db()
         seed_database()
         print("      [OK] Database tables and default seeds verified.")
@@ -66,7 +70,7 @@ def main():
     processes = []
     
     venv_py = BASE_DIR / ".venv" / "Scripts" / "python.exe"
-    python_exe = str(venv_py) if venv_py.exists() else sys.executable
+    python_exe = str(venv_py) if venv_py.exists() and os.name == 'nt' else sys.executable
 
     try:
         for s in SERVICES:

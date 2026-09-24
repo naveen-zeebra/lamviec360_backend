@@ -77,3 +77,21 @@ class AdminUser(Base, TimestampMixin, SoftDeleteMixin):
                     "can_delete": p.can_delete,
                 }
         return result
+
+    @property
+    def is_superuser(self) -> bool:
+        return "super" in (self.role_name or "").lower() or (self.role_rel and "super" in self.role_rel.code.lower())
+
+    @property
+    def user_type(self) -> str:
+        return "super_admin" if self.is_superuser else "admin"
+
+    @property
+    def roles(self) -> list:
+        class RoleAdapter:
+            def __init__(self, code, name):
+                self.code = code
+                self.name = name
+        code = self.role_rel.code if self.role_rel else ("super_admin" if self.is_superuser else "admin")
+        name = self.role_name or (self.role_rel.name if self.role_rel else "Administrator")
+        return [RoleAdapter(code, name)]

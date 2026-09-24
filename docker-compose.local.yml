@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: lamviec360-backend:local
+    container_name: lamviec360-backend-local
+    ports:
+      - "8001:8001"
+      - "8002:8002"
+      - "8003:8003"
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_HOST=host.docker.internal
+      - DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:5432/jobportal_db
+      - REDIS_HOST=host.docker.internal # Just in case they use redis
+    volumes:
+      - .:/app
+    restart: unless-stopped

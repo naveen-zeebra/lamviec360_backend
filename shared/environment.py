@@ -6,7 +6,8 @@ from dotenv import load_dotenv
 ROOT_DIR = Path(__file__).resolve().parent.parent
 ENV_PATH = ROOT_DIR / ".env"
 
-load_dotenv(dotenv_path=ENV_PATH, override=True)
+# Do not override existing system environment variables so Docker config takes precedence
+load_dotenv(dotenv_path=ENV_PATH, override=False)
 
 class EnvironmentConfig:
     APP_ENV: str = os.getenv("APP_ENV", "local").lower()

@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  backend:
+    image: naveenkumar1137/dev_api_lamviec360:latest
+    container_name: lamviec360-backend-dev
+    ports:
+      - "8001:8001"
+      - "8002:8002"
+      - "8003:8003"
+    env_file:
+      - .env
+    restart: always

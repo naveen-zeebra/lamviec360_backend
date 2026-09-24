@@ -174,6 +174,40 @@ def seed_database(db: Session = None):
         else:
             company_profile = company_user.company_profile
 
+        # 4b. Seed ABC Tech Demo Company (lan.tran@abctech.vn)
+        abctech_email = "lan.tran@abctech.vn"
+        abctech_user = db.query(User).filter_by(email=abctech_email).first()
+        if not abctech_user:
+            abctech_user = User(
+                email=abctech_email,
+                hashed_password=hash_password("password123"),
+                full_name="Lan Tran",
+                user_type="company",
+                is_superuser=False,
+                is_verified=True,
+                is_active=True,
+                roles=[role_map["company"]],
+            )
+            db.add(abctech_user)
+            db.flush()
+
+            abctech_profile = CompanyProfile(
+                user_id=abctech_user.id,
+                company_name="ABC Technologies",
+                legal_name="ABC Technology JSC",
+                industry="Technology",
+                company_size="51-200 employees",
+                about="A Vietnamese software company building hiring and workforce products for the region.",
+                website="https://abctech.vn",
+                city="Ho Chi Minh City",
+                country="Vietnam",
+                verification_status="verified",
+                is_featured=True,
+            )
+            db.add(abctech_profile)
+            db.flush()
+            logger.info("Created demo company: lan.tran@abctech.vn")
+
         # 5. Seed Demo Job Seeker
         seeker_email = "seeker@example.com"
         seeker_user = db.query(User).filter_by(email=seeker_email).first()

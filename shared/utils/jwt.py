@@ -67,7 +67,7 @@ def decode_token(token: str) -> Dict[str, Any]:
 def get_current_user(
     auth: Optional[HTTPAuthorizationCredentials] = Depends(security),
     db: Session = Depends(get_db),
-) -> User:
+) -> Any:
     if not auth or not auth.credentials:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -77,6 +77,7 @@ def get_current_user(
     
     payload = decode_token(auth.credentials)
     user_id = payload.get("sub")
+    user_type = payload.get("user_type")
     if not user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -84,8 +85,31 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
     
+    # 1. If user_type is super_admin or admin, query AdminUser table first
+    if user_type in ["super_admin", "admin"]:
+        from shared.models.admin_user import AdminUser
+        admin = db.query(AdminUser).filter(AdminUser.id == int(user_id), AdminUser.is_deleted == False).first()
+        if admin:
+            if not admin.is_active:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Admin account is deactivated",
+                )
+            return admin
+
+    # 2. Check regular User table
     user = db.query(User).filter(User.id == int(user_id)).first()
     if not user:
+        # Fallback check AdminUser in case token user_type was omitted
+        from shared.models.admin_user import AdminUser
+        admin = db.query(AdminUser).filter(AdminUser.id == int(user_id), AdminUser.is_deleted == False).first()
+        if admin:
+            if not admin.is_active:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Admin account is deactivated",
+                )
+            return admin
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",
@@ -101,17 +125,27 @@ def get_current_user(
 def get_current_active_user_optional(
     auth: Optional[HTTPAuthorizationCredentials] = Depends(security),
     db: Session = Depends(get_db),
-) -> Optional[User]:
+) -> Optional[Any]:
     if not auth or not auth.credentials:
         return None
     try:
         payload = decode_token(auth.credentials)
         user_id = payload.get("sub")
+        user_type = payload.get("user_type")
         if not user_id:
             return None
+        if user_type in ["super_admin", "admin"]:
+            from shared.models.admin_user import AdminUser
+            admin = db.query(AdminUser).filter(AdminUser.id == int(user_id), AdminUser.is_deleted == False).first()
+            if admin and admin.is_active:
+                return admin
         user = db.query(User).filter(User.id == int(user_id)).first()
         if user and user.is_active:
             return user
+        from shared.models.admin_user import AdminUser
+        admin = db.query(AdminUser).filter(AdminUser.id == int(user_id), AdminUser.is_deleted == False).first()
+        if admin and admin.is_active:
+            return admin
         return None
     except Exception:
         return None

@@ -37,10 +37,10 @@ class ResetPasswordRequest(BaseModel):
     new_password: str = Field(..., min_length=6)
 
 class SendVerificationEmailRequest(BaseModel):
-    email: Optional[EmailStr] = None
+    email: Optional[str] = None
 
 class VerifyEmailRequest(BaseModel):
-    email: Optional[EmailStr] = None
+    email: Optional[str] = None
     code: str = Field(..., min_length=4, max_length=10)
 
 class ChangePasswordRequest(BaseModel):
