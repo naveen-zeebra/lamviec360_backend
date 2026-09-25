@@ -1,13 +1,12 @@
-from typing import Optional
+from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
+from pydantic import BaseModel
 
 from shared.database.session import get_db
 from shared.models import User, CompanyProfile, JobPosting, JobApplication, JobSeekerProfile
 from shared.schemas import ApplicationStatusUpdate, PaginatedResponse, APIResponse
-from pydantic import BaseModel
-from typing import List, Optional
 from shared.utils import (
     get_current_user,
     require_user_type,
@@ -18,6 +17,15 @@ from shared.utils import (
 
 router = APIRouter(prefix="/applicants", tags=["ATS Applicant Management"])
 
+def _get_company_tenant(user: User) -> CompanyProfile:
+    profile = user.company_profile
+    if not profile:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access restricted: No employer organization associated with this tenant account",
+        )
+    return profile
+
 @router.get("", response_model=PaginatedResponse[dict])
 def list_applicants(
     job_id: Optional[int] = Query(None),
@@ -27,11 +35,9 @@ def list_applicants(
     user: User = Depends(require_user_type("company", "super_admin")),
     db: Session = Depends(get_db),
 ):
-    profile = user.company_profile
-    if not profile:
-        return paginated_response(items=[], total_items=0, page=page, page_size=page_size)
+    profile = _get_company_tenant(user)
 
-    # Query applications for any job posted by this company
+    # Strictly query applications for jobs owned by this specific company tenant
     query = (
         db.query(JobApplication)
         .join(JobPosting, JobApplication.job_id == JobPosting.id)
@@ -51,22 +57,34 @@ def list_applicants(
     for app in applications:
         seeker = app.jobseeker
         seeker_user = seeker.user if seeker else None
+        candidate_name = seeker_user.full_name if seeker_user else "Anonymous"
+        candidate_email = seeker_user.email if seeker_user else None
+        candidate_phone = seeker_user.phone if seeker_user else ""
+        exp_years = float(seeker.experience_years or 0) if seeker else 0.0
+
         items.append({
             "id": app.id,
             "job_id": app.job_id,
             "job_title": app.job.title if app.job else "Unknown Job",
-            "candidate_name": seeker_user.full_name if seeker_user else "Anonymous",
-            "candidate_email": seeker_user.email if seeker_user else None,
-            "candidate_phone": seeker_user.phone if seeker_user else None,
+            "candidate_name": candidate_name,
+            "candidate_email": candidate_email,
+            "candidate_phone": candidate_phone,
             "candidate_headline": seeker.headline if seeker else None,
             "candidate_skills": seeker.skills if seeker else None,
-            "candidate_experience_years": float(seeker.experience_years or 0) if seeker else 0.0,
+            "candidate_experience_years": exp_years,
             "resume_url": app.resume_url or (seeker.resume_url if seeker else None),
             "cover_letter": app.cover_letter,
             "status": app.status,
             "rating": app.rating,
             "recruiter_notes": app.recruiter_notes,
-            "applied_at": app.created_at,
+            "applied_at": app.created_at.isoformat() if app.created_at else None,
+            # Frontend compatibility fields
+            "name": candidate_name,
+            "email": candidate_email,
+            "phone": candidate_phone,
+            "stage": app.status,
+            "experience_years": exp_years,
+            "applied_date": app.created_at.strftime("%Y-%m-%d") if app.created_at else None,
         })
 
     return paginated_response(
@@ -84,11 +102,11 @@ def get_applicant_detail(
     user: User = Depends(require_user_type("company", "super_admin")),
     db: Session = Depends(get_db),
 ):
-    profile = user.company_profile
+    profile = _get_company_tenant(user)
     app = (
         db.query(JobApplication)
         .join(JobPosting, JobApplication.job_id == JobPosting.id)
-        .filter(JobApplication.id == application_id, JobPosting.company_id == profile.id if profile else False)
+        .filter(JobApplication.id == application_id, JobPosting.company_id == profile.id)
         .first()
     )
 
@@ -135,11 +153,11 @@ def update_applicant_status(
     user: User = Depends(require_user_type("company", "super_admin")),
     db: Session = Depends(get_db),
 ):
-    profile = user.company_profile
+    profile = _get_company_tenant(user)
     app = (
         db.query(JobApplication)
         .join(JobPosting, JobApplication.job_id == JobPosting.id)
-        .filter(JobApplication.id == application_id, JobPosting.company_id == profile.id if profile else False)
+        .filter(JobApplication.id == application_id, JobPosting.company_id == profile.id)
         .first()
     )
 
@@ -182,11 +200,11 @@ def bulk_update_applicant_status(
     user: User = Depends(require_user_type("company", "super_admin")),
     db: Session = Depends(get_db),
 ):
-    profile = user.company_profile
+    profile = _get_company_tenant(user)
     apps = (
         db.query(JobApplication)
         .join(JobPosting, JobApplication.job_id == JobPosting.id)
-        .filter(JobApplication.id.in_(data.application_ids), JobPosting.company_id == profile.id if profile else False)
+        .filter(JobApplication.id.in_(data.application_ids), JobPosting.company_id == profile.id)
         .all()
     )
     for app in apps:
@@ -206,11 +224,11 @@ def add_candidate_note(
     user: User = Depends(require_user_type("company", "super_admin")),
     db: Session = Depends(get_db),
 ):
-    profile = user.company_profile
+    profile = _get_company_tenant(user)
     app = (
         db.query(JobApplication)
         .join(JobPosting, JobApplication.job_id == JobPosting.id)
-        .filter(JobApplication.id == application_id, JobPosting.company_id == profile.id if profile else False)
+        .filter(JobApplication.id == application_id, JobPosting.company_id == profile.id)
         .first()
     )
     if not app:
@@ -237,11 +255,11 @@ def schedule_candidate_interview(
     user: User = Depends(require_user_type("company", "super_admin")),
     db: Session = Depends(get_db),
 ):
-    profile = user.company_profile
+    profile = _get_company_tenant(user)
     app = (
         db.query(JobApplication)
         .join(JobPosting, JobApplication.job_id == JobPosting.id)
-        .filter(JobApplication.id == application_id, JobPosting.company_id == profile.id if profile else False)
+        .filter(JobApplication.id == application_id, JobPosting.company_id == profile.id)
         .first()
     )
     if not app:
@@ -251,5 +269,3 @@ def schedule_candidate_interview(
     db.commit()
     
     return success_response(message="Interview scheduled successfully")
-
-

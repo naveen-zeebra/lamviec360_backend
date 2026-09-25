@@ -21,6 +21,15 @@ from shared.utils import (
 
 router = APIRouter(prefix="/jobs", tags=["Company Job Management"])
 
+def _get_company_tenant(user: User) -> CompanyProfile:
+    profile = user.company_profile
+    if not profile:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access restricted: No employer organization associated with this tenant account",
+        )
+    return profile
+
 @router.get("", response_model=PaginatedResponse[dict])
 def list_company_jobs(
     status_filter: Optional[str] = Query(None, alias="status"),
@@ -33,6 +42,7 @@ def list_company_jobs(
     if not profile:
         return paginated_response(items=[], total_items=0, page=page, page_size=page_size)
 
+    # Strictly isolated to this company tenant's ID
     query = db.query(JobPosting).filter(
         JobPosting.company_id == profile.id,
         JobPosting.is_deleted == False,
@@ -50,9 +60,11 @@ def list_company_jobs(
             "id": j.id,
             "title": j.title,
             "job_type": j.job_type,
+            "type": j.job_type,
             "workplace_type": j.workplace_type,
             "experience_level": j.experience_level,
             "city": j.city,
+            "location": j.city,
             "salary_min": float(j.salary_min) if j.salary_min else None,
             "salary_max": float(j.salary_max) if j.salary_max else None,
             "salary_currency": j.salary_currency,
@@ -60,7 +72,11 @@ def list_company_jobs(
             "moderation_status": j.moderation_status,
             "views_count": j.views_count,
             "applications_count": j.applications_count,
-            "created_at": j.created_at,
+            "applicant_count": j.applications_count,
+            "deadline": j.expires_at.isoformat() if j.expires_at else None,
+            "created_at": j.created_at.isoformat() if j.created_at else None,
+            "skills": [s.strip() for s in (j.required_skills or "").split(",") if s.strip()],
+            "jd": j.description,
         })
 
     return paginated_response(
@@ -131,10 +147,10 @@ def get_company_job(
     user: User = Depends(require_user_type("company", "super_admin")),
     db: Session = Depends(get_db),
 ):
-    profile = user.company_profile
+    profile = _get_company_tenant(user)
     job = db.query(JobPosting).filter(
         JobPosting.id == job_id,
-        JobPosting.company_id == profile.id if profile else False,
+        JobPosting.company_id == profile.id,
         JobPosting.is_deleted == False,
     ).first()
 
@@ -149,20 +165,24 @@ def get_company_job(
             "requirements": job.requirements,
             "benefits": job.benefits,
             "job_type": job.job_type,
+            "type": job.job_type,
             "workplace_type": job.workplace_type,
             "experience_level": job.experience_level,
             "city": job.city,
+            "location": job.city,
             "country": job.country,
             "salary_min": float(job.salary_min) if job.salary_min else None,
             "salary_max": float(job.salary_max) if job.salary_max else None,
             "salary_currency": job.salary_currency,
             "is_negotiable": job.is_negotiable,
             "required_skills": job.required_skills,
+            "skills": [s.strip() for s in (job.required_skills or "").split(",") if s.strip()],
             "status": job.status,
             "moderation_status": job.moderation_status,
             "views_count": job.views_count,
             "applications_count": job.applications_count,
-            "created_at": job.created_at,
+            "applicant_count": job.applications_count,
+            "created_at": job.created_at.isoformat() if job.created_at else None,
         }
     )
 
@@ -174,10 +194,10 @@ def update_company_job(
     user: User = Depends(require_user_type("company", "super_admin")),
     db: Session = Depends(get_db),
 ):
-    profile = user.company_profile
+    profile = _get_company_tenant(user)
     job = db.query(JobPosting).filter(
         JobPosting.id == job_id,
-        JobPosting.company_id == profile.id if profile else False,
+        JobPosting.company_id == profile.id,
         JobPosting.is_deleted == False,
     ).first()
 
@@ -196,24 +216,70 @@ def update_company_job(
 @router.patch("/{job_id}/status", response_model=APIResponse[dict])
 def toggle_job_status(
     job_id: int,
-    status_val: str = Query(..., alias="status", pattern="^(active|closed|draft)$"),
+    status_val: str = Query(..., alias="status", pattern="^(active|closed|draft|Published|Draft|Closed)$"),
     user: User = Depends(require_user_type("company", "super_admin")),
     db: Session = Depends(get_db),
 ):
-    profile = user.company_profile
+    profile = _get_company_tenant(user)
     job = db.query(JobPosting).filter(
         JobPosting.id == job_id,
-        JobPosting.company_id == profile.id if profile else False,
+        JobPosting.company_id == profile.id,
         JobPosting.is_deleted == False,
     ).first()
 
     if not job:
         raise HTTPException(status_code=404, detail="Job posting not found")
 
-    job.status = status_val
+    # Normalize status
+    norm_status = status_val.lower()
+    if norm_status == "published":
+        norm_status = "active"
+    job.status = norm_status
     db.commit()
 
     return success_response(message=f"Job status updated to {status_val}")
+
+
+@router.post("/{job_id}/duplicate", response_model=APIResponse[dict])
+def duplicate_company_job(
+    job_id: int,
+    user: User = Depends(require_user_type("company", "super_admin")),
+    db: Session = Depends(get_db),
+):
+    profile = _get_company_tenant(user)
+    source_job = db.query(JobPosting).filter(
+        JobPosting.id == job_id,
+        JobPosting.company_id == profile.id,
+        JobPosting.is_deleted == False,
+    ).first()
+
+    if not source_job:
+        raise HTTPException(status_code=404, detail="Job posting not found")
+
+    new_job = JobPosting(
+        company_id=profile.id,
+        title=f"{source_job.title} (Copy)",
+        description=source_job.description,
+        requirements=source_job.requirements,
+        benefits=source_job.benefits,
+        job_type=source_job.job_type,
+        workplace_type=source_job.workplace_type,
+        experience_level=source_job.experience_level,
+        city=source_job.city,
+        country=source_job.country,
+        salary_min=source_job.salary_min,
+        salary_max=source_job.salary_max,
+        salary_currency=source_job.salary_currency,
+        is_negotiable=source_job.is_negotiable,
+        required_skills=source_job.required_skills,
+        status="draft",
+        moderation_status="approved",
+    )
+    db.add(new_job)
+    db.commit()
+    db.refresh(new_job)
+
+    return success_response(data={"id": new_job.id, "title": new_job.title}, message="Job duplicated successfully")
 
 
 @router.delete("/{job_id}", response_model=APIResponse[None])
@@ -222,10 +288,10 @@ def delete_company_job(
     user: User = Depends(require_user_type("company", "super_admin")),
     db: Session = Depends(get_db),
 ):
-    profile = user.company_profile
+    profile = _get_company_tenant(user)
     job = db.query(JobPosting).filter(
         JobPosting.id == job_id,
-        JobPosting.company_id == profile.id if profile else False,
+        JobPosting.company_id == profile.id,
         JobPosting.is_deleted == False,
     ).first()
 

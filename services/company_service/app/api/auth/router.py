@@ -449,9 +449,15 @@ def get_company_me(user: User = Depends(get_current_user)):
             "id": user.id,
             "email": user.email,
             "full_name": user.full_name,
+            "user_name": user.full_name,
+            "user_email": user.email,
             "phone": user.phone,
             "user_type": user.user_type,
+            "company_id": profile.id if profile else None,
+            "company_name": profile.company_name if profile else None,
             "company_profile": profile_data,
+            "role": "Company Admin",
+            "approval_status": profile.verification_status if profile else "verified",
         }
     )
 

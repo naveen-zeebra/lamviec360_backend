@@ -20,6 +20,18 @@ class CompanyProfile(Base, TimestampMixin):
     city = Column(String(100), nullable=True)
     country = Column(String(100), default="Vietnam")
     
+    # Extended Company Profile Info
+    contact_email = Column(String(255), nullable=True)
+    contact_phone = Column(String(50), nullable=True)
+    contact_person = Column(String(255), nullable=True)
+    tax_code = Column(String(100), nullable=True)
+    founded_year = Column(Integer, nullable=True)
+    linkedin_url = Column(String(500), nullable=True)
+    facebook_url = Column(String(500), nullable=True)
+    benefits = Column(Text, nullable=True)
+    subscription_tier = Column(String(50), default="Freemium", nullable=True)
+    settings = Column(Text, nullable=True)  # JSON-encoded tenant settings
+
     # Moderation & Verification by Super Admin
     verification_status = Column(String(50), default="pending", nullable=False, index=True)  # pending, verified, rejected
     verification_notes = Column(Text, nullable=True)
