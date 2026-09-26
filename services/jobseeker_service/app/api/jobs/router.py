@@ -23,7 +23,7 @@ def search_jobs(
     db: Session = Depends(get_db),
 ):
     query = db.query(JobPosting).filter(
-        JobPosting.status == "active",
+        JobPosting.status == "published",
         JobPosting.moderation_status == "approved",
         JobPosting.is_deleted == False,
     )

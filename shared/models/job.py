@@ -28,7 +28,7 @@ class JobPosting(Base, TimestampMixin, SoftDeleteMixin):
     required_skills = Column(Text, nullable=True)  # Comma separated e.g. "React, Python, Docker"
     
     # Status lifecycle
-    status = Column(String(50), default="active", nullable=False, index=True)  # draft, active, closed
+    status = Column(String(50), default="published", nullable=False, index=True)  # draft, published, closed
     moderation_status = Column(String(50), default="approved", nullable=False, index=True)  # pending, approved, rejected
     moderation_notes = Column(Text, nullable=True)
     

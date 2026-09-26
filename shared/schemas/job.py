@@ -20,7 +20,7 @@ class JobPostingBase(BaseModel):
     required_skills: Optional[str] = None
 
 class JobPostingCreate(JobPostingBase):
-    pass
+    status: Optional[str] = "published"
 
 class JobPostingUpdate(BaseModel):
     title: Optional[str] = None

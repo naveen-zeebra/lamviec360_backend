@@ -8,6 +8,7 @@ user_roles = Table(
     Base.metadata,
     Column("user_id", Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
     Column("role_id", Integer, ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
+    extend_existing=True,
 )
 
 class Role(Base, TimestampMixin):

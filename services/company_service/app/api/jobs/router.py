@@ -76,6 +76,7 @@ def list_company_jobs(
             "deadline": j.expires_at.isoformat() if j.expires_at else None,
             "created_at": j.created_at.isoformat() if j.created_at else None,
             "skills": [s.strip() for s in (j.required_skills or "").split(",") if s.strip()],
+            "description": j.description,
             "jd": j.description,
         })
 
@@ -101,6 +102,9 @@ def create_job_posting(
         db.add(profile)
         db.flush()
 
+    raw_status = (getattr(data, "status", None) or "published").lower()
+    init_status = "published" if raw_status in ("active", "published") else raw_status
+
     job = JobPosting(
         company_id=profile.id,
         title=data.title,
@@ -117,7 +121,7 @@ def create_job_posting(
         salary_currency=data.salary_currency,
         is_negotiable=data.is_negotiable,
         required_skills=data.required_skills,
-        status="active",
+        status=init_status,
         moderation_status="approved",
     )
     db.add(job)
@@ -216,7 +220,7 @@ def update_company_job(
 @router.patch("/{job_id}/status", response_model=APIResponse[dict])
 def toggle_job_status(
     job_id: int,
-    status_val: str = Query(..., alias="status", pattern="^(active|closed|draft|Published|Draft|Closed)$"),
+    status_val: str = Query(..., alias="status", pattern="^(?i)(published|draft|closed|paused|active)$"),
     user: User = Depends(require_user_type("company", "super_admin")),
     db: Session = Depends(get_db),
 ):
@@ -230,14 +234,14 @@ def toggle_job_status(
     if not job:
         raise HTTPException(status_code=404, detail="Job posting not found")
 
-    # Normalize status
+    # Normalize status to lowercase
     norm_status = status_val.lower()
-    if norm_status == "published":
-        norm_status = "active"
+    if norm_status == "active":
+        norm_status = "published"
     job.status = norm_status
     db.commit()
 
-    return success_response(message=f"Job status updated to {status_val}")
+    return success_response(message=f"Job status updated to {norm_status}")
 
 
 @router.post("/{job_id}/duplicate", response_model=APIResponse[dict])
