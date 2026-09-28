@@ -36,6 +36,7 @@ def create_company_user_and_profile(
     industry: Optional[str] = None,
     size: Optional[str] = None,
     website: Optional[str] = None,
+    tax_code: Optional[str] = None,
 ) -> Tuple[User, CompanyProfile]:
     """Create new company employer user and pending company profile."""
     parts = (contact_name or company_name or "Representative").strip().split(" ", 1)
@@ -65,6 +66,7 @@ def create_company_user_and_profile(
         industry=industry or "Technology",
         company_size=size or "11-50",
         website=website,
+        tax_code=tax_code,
         verification_status="pending",
     )
     db.add(profile)

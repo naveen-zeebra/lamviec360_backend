@@ -413,6 +413,7 @@ def seed_database(db: Session = None):
                     expected_salary=sal,
                     city=city,
                     country="Vietnam",
+                    resume_url=f"/uploads/resumes/{fname.replace(' ', '_')}_CV.pdf",
                     github_url="https://github.com",
                     linkedin_url="https://linkedin.com",
                 )
@@ -569,6 +570,7 @@ def seed_database(db: Session = None):
                     jobseeker_id=seeker_profiles[0].id,
                     status="interviewing",
                     rating=5,
+                    resume_url="/uploads/resumes/Nguyen_Van_A_CV.pdf",
                     cover_letter="I am passionate about building resilient FastAPI microservices and would love to bring my backend architecture expertise to TechCorp Global.",
                     recruiter_notes="Strong performance in round 1 technical interview. Recommended for system design round.",
                 )
@@ -577,6 +579,7 @@ def seed_database(db: Session = None):
                     jobseeker_id=seeker_profiles[1].id,
                     status="applied",
                     rating=4,
+                    resume_url="/uploads/resumes/Tran_Thi_B_CV.pdf",
                     cover_letter="My testing and frontend automation background allows me to ensure rock-solid user experiences across modern React platforms.",
                     recruiter_notes="Good portfolio and testing mindset.",
                 )
@@ -585,6 +588,7 @@ def seed_database(db: Session = None):
                     jobseeker_id=seeker_profiles[2].id,
                     status="shortlisted",
                     rating=4,
+                    resume_url="/uploads/resumes/Le_Van_C_CV.pdf",
                     cover_letter="Interested in the technical leadership opportunities at TechCorp Global.",
                     recruiter_notes="Profile shortlisted by engineering manager.",
                 )
@@ -605,6 +609,7 @@ def seed_database(db: Session = None):
                     jobseeker_id=seeker_profiles[0].id,
                     status="applied",
                     rating=4,
+                    resume_url="/uploads/resumes/Nguyen_Van_A_CV.pdf",
                     cover_letter="Excited about ABC Technologies' growth in Vietnam. I have built multiple Next.js + Python web products.",
                     recruiter_notes="Candidate has solid Next.js experience. Resume reviewed by Lan Tran.",
                 )
@@ -613,6 +618,7 @@ def seed_database(db: Session = None):
                     jobseeker_id=seeker_profiles[1].id,
                     status="interviewing",
                     rating=5,
+                    resume_url="/uploads/resumes/Tran_Thi_B_CV.pdf",
                     cover_letter="I have 5 years building automated test suites with Playwright and GitHub Actions. ABC Tech's product suite aligns perfectly with my background.",
                     recruiter_notes="Excellent round 1 coding challenge. Scheduled for cultural interview.",
                 )
@@ -621,6 +627,7 @@ def seed_database(db: Session = None):
                     jobseeker_id=seeker_profiles[2].id,
                     status="shortlisted",
                     rating=5,
+                    resume_url="/uploads/resumes/Le_Van_C_CV.pdf",
                     cover_letter="I love building scalable design systems and would be thrilled to lead UI/UX design at ABC Technologies.",
                     recruiter_notes="Exceptional Figma portfolio and design tokens knowledge.",
                 )

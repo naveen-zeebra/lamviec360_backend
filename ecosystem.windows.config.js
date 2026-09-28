@@ -1,11 +1,11 @@
 const path = require("path");
 
 // ==========================================
-// UBUNTU / LINUX PM2 CONFIGURATION
+// WINDOWS PM2 CONFIGURATION
 // Python virtual environment interpreter path:
-// .venv/bin/python
+// .venv\Scripts\python.exe
 // ==========================================
-const pythonInterpreter = path.resolve(__dirname, ".venv", "bin", "python");
+const pythonInterpreter = path.resolve(__dirname, ".venv", "Scripts", "python.exe");
 
 module.exports = {
   apps: [

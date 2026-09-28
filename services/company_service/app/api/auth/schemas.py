@@ -15,6 +15,8 @@ class CompanyRegisterRequest(BaseModel):
     company_size: Optional[str] = None
     website: Optional[str] = None
     reg_number: Optional[str] = None
+    tax_id: Optional[str] = None
+    tax_code: Optional[str] = None
 
     @field_validator("email")
     @classmethod

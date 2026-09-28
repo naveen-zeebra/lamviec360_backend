@@ -36,13 +36,34 @@ def list_applicants_controller(
     user: User,
     job_id: Optional[int],
     status_filter: Optional[str],
+    search: Optional[str],
+    min_score: Optional[int],
+    sort_by: Optional[str],
+    sort_order: Optional[str],
     page: int,
     page_size: int,
     db: Session,
 ) -> Tuple[List[Dict[str, Any]], int]:
-    """List paginated candidates."""
+    """List paginated candidates with multi-attribute search and sorting."""
     profile = _require_company_profile(user)
-    return service.list_company_applicants(db, profile.id, job_id, status_filter, page, page_size)
+    return service.list_company_applicants(
+        db=db,
+        company_id=profile.id,
+        job_id=job_id,
+        status_filter=status_filter,
+        search=search,
+        min_score=min_score,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        page=page,
+        page_size=page_size,
+    )
+
+
+def get_stage_counts_controller(user: User, job_id: Optional[int], db: Session) -> Dict[str, int]:
+    """Retrieve stage counts for company ATS pipeline."""
+    profile = _require_company_profile(user)
+    return service.get_company_stage_counts(db=db, company_id=profile.id, job_id=job_id)
 
 
 def get_applicant_detail_controller(application_id: int, user: User, db: Session) -> Dict[str, Any]:
@@ -116,10 +137,9 @@ def schedule_interview_controller(
     user: User,
     db: Session,
 ) -> None:
-    """Schedule interview round with candidate."""
+    """Schedule candidate interview and notify."""
     profile = _require_company_profile(user)
     app = service.get_applicant_by_id(db, profile.id, application_id)
     if not app:
         raise HTTPException(status_code=404, detail="Applicant record not found")
-    interview_dict = data.model_dump() if hasattr(data, "model_dump") else data.dict()
-    service.schedule_candidate_interview(db, app, interview_dict)
+    service.schedule_candidate_interview(db, app, data.model_dump())

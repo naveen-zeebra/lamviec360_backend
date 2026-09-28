@@ -53,6 +53,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from fastapi.staticfiles import StaticFiles
+import os
+
+# Static files for uploaded resumes and media
+uploads_dir = Path(__file__).resolve().parent.parent.parent.parent / "uploads"
+os.makedirs(uploads_dir, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
+
 # Register routes
 register_routes(app)
 

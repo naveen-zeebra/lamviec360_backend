@@ -80,7 +80,13 @@ To switch to **PostgreSQL**:
    python create_postgres_db.py
    ```
 
-### 3. Run All 3 Gateways Concurrently
+### 3. Database Migrations (Alembic)
+For tracking schema changes, auto-generating revisions, and rollbacks, see the complete guide in [alembic.md](file:///d:/Project/JobPortal/git_src/git_lamviec_360/lamviec360_backend/alembic.md).
+```bash
+python -m alembic upgrade head
+```
+
+### 4. Run All 3 Gateways Concurrently
 ```bash
 python run.py
 ```

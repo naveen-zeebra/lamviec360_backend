@@ -20,6 +20,7 @@ from .schemas import (
 )
 from .controller import (
     list_applicants_controller,
+    get_stage_counts_controller,
     get_applicant_detail_controller,
     update_applicant_status_controller,
     bulk_update_status_controller,
@@ -30,16 +31,43 @@ from .controller import (
 router = APIRouter(prefix="/applicants", tags=["ATS Applicant Management"])
 
 
+@router.get("/stage-counts", response_model=APIResponse[dict], summary="Get ATS Stage Counts")
+def get_applicant_stage_counts(
+    job_id: Optional[int] = Query(None),
+    user: User = Depends(require_user_type("company", "super_admin")),
+    db: Session = Depends(get_db),
+):
+    counts = get_stage_counts_controller(user, job_id, db)
+    return success_response(data=counts, message="Stage counts retrieved")
+
+
 @router.get("", response_model=PaginatedResponse[dict], summary="List Applicants")
 def list_applicants(
     job_id: Optional[int] = Query(None),
     status_filter: Optional[str] = Query(None, alias="status"),
+    stage_filter: Optional[str] = Query(None, alias="stage"),
+    search: Optional[str] = Query(None),
+    min_score: Optional[int] = Query(None),
+    sort_by: Optional[str] = Query("date"),
+    sort_order: Optional[str] = Query("desc"),
     page: int = Query(1, ge=1),
-    page_size: int = Query(10, ge=1, le=100),
+    page_size: int = Query(25, ge=1, le=100),
     user: User = Depends(require_user_type("company", "super_admin")),
     db: Session = Depends(get_db),
 ):
-    items, total_items = list_applicants_controller(user, job_id, status_filter, page, page_size, db)
+    resolved_status = status_filter or stage_filter
+    items, total_items = list_applicants_controller(
+        user=user,
+        job_id=job_id,
+        status_filter=resolved_status,
+        search=search,
+        min_score=min_score,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        page=page,
+        page_size=page_size,
+        db=db,
+    )
     return paginated_response(
         items=items,
         total_items=total_items,
