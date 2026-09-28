@@ -69,7 +69,9 @@ def main():
     print("\n[2/2] Launching 3 Gateway Servers concurrently...")
     processes = []
     
-    venv_py = BASE_DIR / ".venv" / "Scripts" / "python.exe"
+    venv_py = BASE_DIR / "venv" / "Scripts" / "python.exe"
+    if not venv_py.exists():
+        venv_py = BASE_DIR / ".venv" / "Scripts" / "python.exe"
     python_exe = str(venv_py) if venv_py.exists() and os.name == 'nt' else sys.executable
 
     try:

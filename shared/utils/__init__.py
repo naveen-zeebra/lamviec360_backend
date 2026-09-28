@@ -18,6 +18,7 @@ from shared.utils.email import (
     send_verification_email,
     send_password_reset_email,
 )
+from shared.utils.error_handler import service_error_handler
 
 __all__ = [
     "get_logger",
@@ -38,5 +39,6 @@ __all__ = [
     "send_email",
     "send_verification_email",
     "send_password_reset_email",
+    "service_error_handler",
 ]
 

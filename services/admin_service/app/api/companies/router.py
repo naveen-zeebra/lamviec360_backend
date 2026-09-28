@@ -1,21 +1,27 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# File    : services/admin_service/app/api/companies/router.py
+# Purpose : HTTP Routing endpoints for Admin Company Verification
+# ─────────────────────────────────────────────────────────────────────────────
+
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.orm import Session
-from sqlalchemy import desc
 
 from shared.database.session import get_db
-from shared.models import CompanyProfile, User
-from shared.schemas import CompanyVerifyRequest, PaginatedResponse, APIResponse
-from pydantic import BaseModel
-from shared.utils import (
-    get_current_user,
-    require_roles,
-    success_response,
-    paginated_response,
-    log_audit_event,
+from shared.models import User
+from shared.schemas import PaginatedResponse, APIResponse
+from shared.utils import require_roles, success_response, paginated_response
+from .schemas import CompanyVerifySchema, UpdateCompanyPlanSchema
+from .controller import (
+    list_companies_controller,
+    get_company_detail_controller,
+    verify_company_controller,
+    toggle_feature_company_controller,
+    update_company_plan_controller,
 )
 
 router = APIRouter(prefix="/companies", tags=["Admin Company Verification"])
+
 
 @router.get("", response_model=PaginatedResponse[dict])
 def list_companies(
@@ -26,34 +32,14 @@ def list_companies(
     current_admin: User = Depends(require_roles("super_admin", "admin")),
     db: Session = Depends(get_db),
 ):
-    query = db.query(CompanyProfile)
-    if status_filter:
-        query = query.filter(CompanyProfile.verification_status == status_filter)
-    if search:
-        query = query.filter(CompanyProfile.company_name.ilike(f"%{search.strip()}%"))
-
-    total_items = query.count()
-    offset = (page - 1) * page_size
-    companies = query.order_by(desc(CompanyProfile.created_at)).offset(offset).limit(page_size).all()
-
-    items = []
-    for c in companies:
-        items.append({
-            "id": c.id,
-            "user_id": c.user_id,
-            "company_name": c.company_name,
-            "legal_name": c.legal_name,
-            "logo_url": c.logo_url,
-            "website": c.website,
-            "industry": c.industry,
-            "company_size": c.company_size,
-            "city": c.city,
-            "verification_status": c.verification_status,
-            "is_featured": c.is_featured,
-            "active_jobs_count": len([j for j in c.job_postings if j.status == 'active' and not j.is_deleted]),
-            "created_at": c.created_at,
-        })
-
+    """List companies with verification status filter and search query."""
+    items, total_items = list_companies_controller(
+        db=db,
+        status_filter=status_filter,
+        search=search,
+        page=page,
+        page_size=page_size,
+    )
     return paginated_response(
         items=items,
         total_items=total_items,
@@ -69,67 +55,30 @@ def get_company_detail(
     current_admin: User = Depends(require_roles("super_admin", "admin")),
     db: Session = Depends(get_db),
 ):
-    c = db.query(CompanyProfile).filter(CompanyProfile.id == company_id).first()
-    if not c:
-        raise HTTPException(status_code=404, detail="Company not found")
-
-    return success_response(
-        data={
-            "id": c.id,
-            "user_id": c.user_id,
-            "company_name": c.company_name,
-            "legal_name": c.legal_name,
-            "logo_url": c.logo_url,
-            "cover_image_url": c.cover_image_url,
-            "website": c.website,
-            "industry": c.industry,
-            "company_size": c.company_size,
-            "about": c.about,
-            "address": c.address,
-            "city": c.city,
-            "country": c.country,
-            "verification_status": c.verification_status,
-            "verification_notes": c.verification_notes,
-            "is_featured": c.is_featured,
-            "created_at": c.created_at,
-        }
-    )
+    """Retrieve full company profile information."""
+    data = get_company_detail_controller(db=db, company_id=company_id)
+    return success_response(data=data)
 
 
 @router.patch("/{company_id}/verify", response_model=APIResponse[dict])
 def verify_company(
     company_id: int,
-    data: CompanyVerifyRequest,
+    data: CompanyVerifySchema,
     request: Request,
     current_admin: User = Depends(require_roles("super_admin", "admin")),
     db: Session = Depends(get_db),
 ):
-    c = db.query(CompanyProfile).filter(CompanyProfile.id == company_id).first()
-    if not c:
-        raise HTTPException(status_code=404, detail="Company not found")
-
-    c.verification_status = data.verification_status
-    if data.verification_notes is not None:
-        c.verification_notes = data.verification_notes
-    if data.is_featured is not None:
-        c.is_featured = data.is_featured
-
-    db.commit()
-
-    log_audit_event(
-        db,
-        action="VERIFY_COMPANY",
-        module="ADMIN_COMPANIES",
-        description=f"Admin {current_admin.email} set company {c.company_name} status={data.verification_status}",
-        user_id=current_admin.id,
-        user_email=current_admin.email,
-        user_type=current_admin.user_type,
+    """Update company verification status (verified, rejected, pending)."""
+    res = verify_company_controller(
+        db=db,
+        company_id=company_id,
+        data=data,
+        current_admin=current_admin,
         request=request,
     )
-
     return success_response(
-        data={"id": c.id, "verification_status": c.verification_status},
-        message=f"Company verification set to {c.verification_status}",
+        data=res,
+        message=f"Company verification set to {data.verification_status}",
     )
 
 
@@ -140,48 +89,37 @@ def toggle_feature_company(
     current_admin: User = Depends(require_roles("super_admin", "admin")),
     db: Session = Depends(get_db),
 ):
-    c = db.query(CompanyProfile).filter(CompanyProfile.id == company_id).first()
-    if not c:
-        raise HTTPException(status_code=404, detail="Company not found")
+    """Toggle whether a company is featured on the platform."""
+    is_featured = toggle_feature_company_controller(
+        db=db,
+        company_id=company_id,
+        current_admin=current_admin,
+        request=request,
+    )
+    status_str = "featured" if is_featured else "unfeatured"
+    return success_response(
+        data={"is_featured": is_featured},
+        message=f"Company {status_str}",
+    )
 
-    c.is_featured = not c.is_featured
-    db.commit()
-
-    status_str = "featured" if c.is_featured else "unfeatured"
-    return success_response(data={"is_featured": c.is_featured}, message=f"Company {status_str}")
-
-
-class UpdateCompanyPlanRequest(BaseModel):
-    plan_id: str
 
 @router.patch("/{company_id}/plan", response_model=APIResponse[dict])
 def update_company_plan(
     company_id: int,
-    data: UpdateCompanyPlanRequest,
+    data: UpdateCompanyPlanSchema,
     request: Request,
     current_admin: User = Depends(require_roles("super_admin")),
     db: Session = Depends(get_db),
 ):
-    c = db.query(CompanyProfile).filter(CompanyProfile.id == company_id).first()
-    if not c:
-        raise HTTPException(status_code=404, detail="Company not found")
-
-    # Mock updating the plan
-    # c.plan_id = data.plan_id
-    # db.commit()
-
-    log_audit_event(
-        db,
-        action="UPDATE_COMPANY_PLAN",
-        module="ADMIN_COMPANIES",
-        description=f"Admin {current_admin.email} updated company '{c.company_name}' plan to {data.plan_id}",
-        user_id=current_admin.id,
-        user_email=current_admin.email,
-        user_type=current_admin.user_type,
+    """Update subscription plan assigned to a company."""
+    res = update_company_plan_controller(
+        db=db,
+        company_id=company_id,
+        data=data,
+        current_admin=current_admin,
         request=request,
     )
-
     return success_response(
-        data={"id": c.id, "plan_id": data.plan_id}, 
-        message=f"Company plan updated to {data.plan_id}"
+        data=res,
+        message=f"Company plan updated to {data.plan_id}",
     )

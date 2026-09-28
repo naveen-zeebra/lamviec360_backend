@@ -95,3 +95,28 @@ class AdminUser(Base, TimestampMixin, SoftDeleteMixin):
         code = self.role_rel.code if self.role_rel else ("super_admin" if self.is_superuser else "admin")
         name = self.role_name or (self.role_rel.name if self.role_rel else "Administrator")
         return [RoleAdapter(code, name)]
+
+
+class AdminRefreshToken(Base, TimestampMixin):
+    __tablename__ = "admin_refresh_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    admin_id = Column(Integer, ForeignKey("admin_users.id", ondelete="CASCADE"), nullable=False, index=True)
+    token = Column(Text, nullable=False, unique=True, index=True)
+    is_revoked = Column(Boolean, default=False, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+
+    admin = relationship("AdminUser", backref="refresh_tokens")
+
+
+class AdminPasswordReset(Base, TimestampMixin):
+    __tablename__ = "admin_password_resets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    admin_id = Column(Integer, ForeignKey("admin_users.id", ondelete="CASCADE"), nullable=False, index=True)
+    token = Column(String(64), nullable=False, unique=True, index=True)
+    is_used = Column(Boolean, default=False, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+
+    admin = relationship("AdminUser", backref="password_resets")
+
