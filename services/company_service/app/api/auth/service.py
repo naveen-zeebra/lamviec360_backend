@@ -147,10 +147,12 @@ def change_company_user_password(db: Session, user: User, old_password: str, new
 def get_invite_details(token: str) -> Dict[str, Any]:
     """Return mock or persisted team invitation details."""
     return {
+        "valid": True,
         "email": "invited@example.com",
-        "role": "recruiter",
+        "role": "HR / Recruiter",
         "company_name": "Sample Company",
         "token": token,
+        "message": "Welcome to our team!",
     }
 
 

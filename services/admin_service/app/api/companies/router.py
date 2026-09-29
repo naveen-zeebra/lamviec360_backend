@@ -108,7 +108,7 @@ def update_company_plan(
     company_id: int,
     data: UpdateCompanyPlanSchema,
     request: Request,
-    current_admin: User = Depends(require_roles("super_admin")),
+    current_admin: User = Depends(require_roles("super_admin", "admin")),
     db: Session = Depends(get_db),
 ):
     """Update subscription plan assigned to a company."""

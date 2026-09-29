@@ -133,6 +133,10 @@ def update_company_plan_controller(
             detail=f"Company with ID {company_id} not found",
         )
 
+    c.subscription_tier = data.plan_id
+    db.commit()
+    db.refresh(c)
+
     log_audit_event(
         db,
         action="UPDATE_COMPANY_PLAN",
