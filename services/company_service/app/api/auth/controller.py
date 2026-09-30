@@ -105,6 +105,12 @@ def login_company_controller(data: CompanyLoginRequest, request: Request, db: Se
             detail="Invalid email or password",
         )
 
+    if user.role_type != "company":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied. Please login via the company portal.",
+        )
+
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -156,6 +162,12 @@ def initiate_otp_login_controller(data: LoginInitiateRequest, db: Session) -> Di
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
+        )
+
+    if user.role_type != "company":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied. Please login via the company portal.",
         )
 
     if not user.is_active:
@@ -303,19 +315,31 @@ def verify_email_controller(
     return {"email": target_email, "is_verified": True}
 
 
-def get_invite_controller(token: str) -> Dict[str, Any]:
+def get_invite_controller(db: Session, token: str) -> Dict[str, Any]:
     """Retrieve details for a pending team invite."""
-    return service.get_invite_details(token)
+    return service.get_invite_details(db, token)
 
 
 def activate_invite_controller(data: ActivateInviteRequest, db: Session) -> Dict[str, Any]:
     """Activate invited company team member."""
-    return service.activate_invite_member(data.invite_token, data.name, data.password)
+    return service.activate_invite_member(db, data.invite_token, data.name, data.password)
 
 
-def get_company_me_controller(user: User) -> Dict[str, Any]:
+def get_company_me_controller(user: User, db: Session) -> Dict[str, Any]:
     """Return profile details for currently authenticated company user."""
-    profile = user.company_profile
+    from ..team.service import get_tenant_profile, load_settings
+    
+    profile = get_tenant_profile(db, user)
+    
+    # Check if they are a team member and what their role is
+    role_name = "Company Admin"
+    settings = load_settings(profile)
+    team_members = settings.get("team_members", [])
+    for m in team_members:
+        if m.get("email") == user.email:
+            role_name = m.get("role", "Company Admin")
+            break
+
     profile_data = None
     if profile:
         profile_data = {
@@ -346,7 +370,7 @@ def get_company_me_controller(user: User) -> Dict[str, Any]:
         "company_id": profile.id if profile else None,
         "company_name": profile.company_name if profile else None,
         "company_profile": profile_data,
-        "role": "Company Admin",
+        "role": role_name,
         "approval_status": profile.verification_status if profile else "verified",
     }
 

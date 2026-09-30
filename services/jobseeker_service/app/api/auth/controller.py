@@ -98,6 +98,12 @@ def login_jobseeker_controller(data: JobSeekerLoginRequest, request: Request, db
             detail="Invalid email or password",
         )
 
+    if user.role_type != "jobseeker":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied. Please login via the job seeker portal.",
+        )
+
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

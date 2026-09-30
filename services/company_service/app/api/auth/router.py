@@ -104,8 +104,8 @@ def verify_email(
 
 
 @router.get("/invite/{token}", response_model=APIResponse[dict], summary="Get Invitation Details")
-def get_invite_by_token(token: str):
-    return success_response(data=get_invite_controller(token))
+def get_invite_by_token(token: str, db: Session = Depends(get_db)):
+    return success_response(data=get_invite_controller(db, token))
 
 
 @router.post("/activate-invite", response_model=APIResponse[dict], summary="Activate Team Invitation")
@@ -117,8 +117,8 @@ def activate_team_invite(req: ActivateInviteRequest, db: Session = Depends(get_d
 
 
 @router.get("/me", response_model=APIResponse[dict], summary="Get Current Company User")
-def get_company_me(user: User = Depends(get_current_user)):
-    return success_response(data=get_company_me_controller(user))
+def get_company_me(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return success_response(data=get_company_me_controller(user, db))
 
 
 @router.post("/refresh", response_model=APIResponse[dict], summary="Refresh Access Token")
