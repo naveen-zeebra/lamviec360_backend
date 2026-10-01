@@ -28,20 +28,8 @@ def parse_settings(raw_settings: Any) -> Dict[str, Any]:
 
 @service_error_handler
 def get_or_create_company_profile(db: Session, user: User) -> CompanyProfile:
-    """Retrieve existing profile or initialize default verified profile for user."""
-    profile = db.query(CompanyProfile).filter(CompanyProfile.user_id == user.id).first()
-    if not profile:
-        profile = CompanyProfile(
-            user_id=user.id,
-            company_name=user.full_name or "My Company",
-            verification_status="verified",
-            settings=json.dumps({}),
-        )
-        db.add(profile)
-        db.commit()
-        db.refresh(profile)
-        logger.info(f"Initialized new company profile for user_id={user.id}")
-    return profile
+    from ..tenant import get_tenant_profile
+    return get_tenant_profile(db, user)
 
 
 def serialize_company_profile(profile: CompanyProfile, user: User) -> Dict[str, Any]:

@@ -137,8 +137,10 @@ def login_company_controller(data: CompanyLoginRequest, request: Request, db: Se
         request=request,
     )
 
-    company_id = user.company_profile.id if user.company_profile else None
-    company_name = user.company_profile.company_name if user.company_profile else None
+    from ..tenant import get_tenant_profile
+    tenant_profile = get_tenant_profile(db, user)
+    company_id = tenant_profile.id if tenant_profile else None
+    company_name = tenant_profile.company_name if tenant_profile else None
 
     return {
         "access_token": access_token,
@@ -176,8 +178,10 @@ def initiate_otp_login_controller(data: LoginInitiateRequest, db: Session) -> Di
             detail="Your company account is inactive. Please contact administrator.",
         )
 
-    if user.company_profile:
-        v_status = (user.company_profile.verification_status or "").lower()
+    from ..tenant import get_tenant_profile
+    tenant_profile = get_tenant_profile(db, user)
+    if tenant_profile:
+        v_status = (tenant_profile.verification_status or "").lower()
         if v_status == "pending":
             return {
                 "status": "PENDING_APPROVAL",
@@ -230,8 +234,10 @@ def verify_otp_login_controller(data: VerifyOtpRequest, request: Request, db: Se
     )
     refresh_token = create_refresh_token(user.id)
 
-    company_id = user.company_profile.id if user.company_profile else None
-    company_name = user.company_profile.company_name if user.company_profile else None
+    from ..tenant import get_tenant_profile
+    tenant_profile = get_tenant_profile(db, user)
+    company_id = tenant_profile.id if tenant_profile else None
+    company_name = tenant_profile.company_name if tenant_profile else None
 
     return {
         "access_token": access_token,
@@ -327,7 +333,8 @@ def activate_invite_controller(data: ActivateInviteRequest, db: Session) -> Dict
 
 def get_company_me_controller(user: User, db: Session) -> Dict[str, Any]:
     """Return profile details for currently authenticated company user."""
-    from ..team.service import get_tenant_profile, load_settings
+    from ..tenant import get_tenant_profile
+    from ..team.service import load_settings
     
     profile = get_tenant_profile(db, user)
     

@@ -16,8 +16,10 @@ logger = get_logger("company_data_retention_service")
 
 @service_error_handler
 def get_company_tenant(user: User) -> Optional[CompanyProfile]:
-    """Retrieve company profile for user."""
-    return user.company_profile
+    from ..tenant import get_tenant_profile
+    from shared.database.session import SessionLocal
+    with SessionLocal() as db:
+        return get_tenant_profile(db, user)
 
 
 @service_error_handler

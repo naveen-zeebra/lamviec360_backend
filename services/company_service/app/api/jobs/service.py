@@ -14,23 +14,19 @@ from shared.utils.logger import get_logger
 logger = get_logger("company_jobs_service")
 
 
+from ..tenant import get_tenant_profile
+
 @service_error_handler
 def get_company_tenant(user: User) -> Optional[CompanyProfile]:
     """Return the associated company profile for a user."""
-    return user.company_profile
-
+    from shared.database.session import SessionLocal
+    with SessionLocal() as db:
+        return get_tenant_profile(db, user)
 
 @service_error_handler
 def get_or_create_company_tenant(db: Session, user: User) -> CompanyProfile:
     """Ensure company profile exists before creating jobs."""
-    profile = user.company_profile
-    if not profile:
-        profile = CompanyProfile(user_id=user.id, company_name=user.full_name or "My Company")
-        db.add(profile)
-        db.commit()
-        db.refresh(profile)
-        logger.info(f"Auto-created company profile for user_id={user.id}")
-    return profile
+    return get_tenant_profile(db, user)
 
 
 def serialize_job(j: JobPosting) -> Dict[str, Any]:
