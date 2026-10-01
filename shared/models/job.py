@@ -29,7 +29,7 @@ class JobPosting(Base, TimestampMixin, SoftDeleteMixin):
     
     # Status lifecycle
     status = Column(String(50), default="published", nullable=False, index=True)  # draft, published, closed
-    moderation_status = Column(String(50), default="approved", nullable=False, index=True)  # pending, approved, rejected
+    moderation_status = Column(String(50), default="approved", nullable=False, index=True)  # pending, approved, rejected, flagged
     moderation_notes = Column(Text, nullable=True)
     
     views_count = Column(Integer, default=0)
@@ -39,3 +39,26 @@ class JobPosting(Base, TimestampMixin, SoftDeleteMixin):
     # Relationships
     company = relationship("CompanyProfile", back_populates="job_postings")
     applications = relationship("JobApplication", back_populates="job", cascade="all, delete-orphan")
+    reports = relationship("JobReport", back_populates="job", cascade="all, delete-orphan", order_by="desc(JobReport.created_at)")
+
+
+class JobReport(Base, TimestampMixin):
+    __tablename__ = "job_reports"
+
+    id = Column(Integer, primary_key=True, index=True)
+    job_id = Column(Integer, ForeignKey("job_postings.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+    reporter_name = Column(String(255), nullable=True)
+    reporter_email = Column(String(255), nullable=True)
+    reason = Column(String(100), nullable=False)  # "Scam or Fraud", "Inaccurate Salary", "Discriminatory Content", "Expired", "Other"
+    details = Column(Text, nullable=True)
+
+    status = Column(String(50), default="pending", nullable=False, index=True)  # "pending", "reviewed", "dismissed", "actioned"
+    action_note = Column(Text, nullable=True)
+    actioned_by = Column(String(255), nullable=True)
+    actioned_at = Column(DateTime, nullable=True)
+
+    # Relationships
+    job = relationship("JobPosting", back_populates="reports")
+    reporter = relationship("User")

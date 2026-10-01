@@ -40,3 +40,5 @@ class CompanyProfile(Base, TimestampMixin):
     # Relationships
     user = relationship("User", back_populates="company_profile")
     job_postings = relationship("JobPosting", back_populates="company", cascade="all, delete-orphan")
+    team_members = relationship("CompanyUser", back_populates="company", cascade="all, delete-orphan")
+    invitations = relationship("CompanyInvitation", back_populates="company", cascade="all, delete-orphan")

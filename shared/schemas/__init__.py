@@ -46,6 +46,14 @@ from shared.schemas.application import (
     ApplicationStatusUpdate,
     ApplicationOut,
 )
+from shared.schemas.company_team import (
+    CompanyMemberResponse,
+    CompanyInviteCreateRequest,
+    CompanyInviteResponse,
+    MemberRoleUpdateRequest,
+    MemberStatusUpdateRequest,
+    InvitationAcceptRequest,
+)
 
 __all__ = [
     "BaseResponse",
@@ -90,4 +98,10 @@ __all__ = [
     "ApplicationCreate",
     "ApplicationStatusUpdate",
     "ApplicationOut",
+    "CompanyMemberResponse",
+    "CompanyInviteCreateRequest",
+    "CompanyInviteResponse",
+    "MemberRoleUpdateRequest",
+    "MemberStatusUpdateRequest",
+    "InvitationAcceptRequest",
 ]

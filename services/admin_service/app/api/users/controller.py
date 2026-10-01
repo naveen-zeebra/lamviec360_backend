@@ -50,7 +50,7 @@ def list_users_controller(
     )
 
 
-def get_user_detail_controller(db: Session, user_id: int) -> Dict[str, Any]:
+def get_user_detail_controller(db: Session, user_id: Any) -> Dict[str, Any]:
     """Fetch complete detail for a single platform user."""
     u = get_user_by_id(db, user_id)
     if not u:
@@ -58,19 +58,33 @@ def get_user_detail_controller(db: Session, user_id: int) -> Dict[str, Any]:
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"User with ID {user_id} not found",
         )
+    roles = []
+    for r in (getattr(u, "roles", []) or []):
+        roles.append({
+            "id": getattr(r, "id", None),
+            "name": getattr(r, "name", str(r)),
+            "code": getattr(r, "code", str(r)),
+        })
+    company_name = None
+    if hasattr(u, "company") and u.company:
+        company_name = getattr(u.company, "company_name", None) or getattr(u.company, "legal_name", None)
+
     return {
         "id": u.id,
         "email": u.email,
         "full_name": u.full_name,
         "phone": u.phone,
         "avatar_url": u.avatar_url,
-        "user_type": u.user_type,
+        "user_type": getattr(u, "user_type", "jobseeker"),
+        "company": company_name,
+        "company_id": getattr(u, "company_id", None),
+        "role": getattr(u, "role", "User"),
         "is_active": u.is_active,
         "is_verified": u.is_verified,
-        "is_superuser": u.is_superuser,
-        "roles": [{"id": r.id, "name": r.name, "code": r.code} for r in u.roles],
+        "is_superuser": getattr(u, "is_superuser", False),
+        "roles": roles,
         "created_at": u.created_at.isoformat() if u.created_at else None,
-        "updated_at": u.updated_at.isoformat() if u.updated_at else None,
+        "updated_at": u.updated_at.isoformat() if hasattr(u, "updated_at") and u.updated_at else None,
     }
 
 
@@ -106,7 +120,7 @@ def create_user_controller(
 
 def update_user_controller(
     db: Session,
-    user_id: int,
+    user_id: Any,
     data: UserUpdateSchema,
     current_admin: User,
     request: Optional[Request] = None,
@@ -137,7 +151,7 @@ def update_user_controller(
 
 def toggle_user_active_controller(
     db: Session,
-    user_id: int,
+    user_id: Any,
     current_admin: User,
     request: Optional[Request] = None,
 ) -> bool:
@@ -149,7 +163,7 @@ def toggle_user_active_controller(
             detail=f"User with ID {user_id} not found",
         )
 
-    if u.id == current_admin.id:
+    if hasattr(u, "id") and u.id == current_admin.id and not str(user_id).startswith("cu_"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot deactivate or delete your own account",

@@ -11,6 +11,7 @@ from shared.models import User
 from shared.utils import (
     create_access_token,
     create_refresh_token,
+    create_company_token,
     decode_token,
     send_verification_email,
     log_audit_event,
@@ -117,12 +118,18 @@ def login_company_controller(data: CompanyLoginRequest, request: Request, db: Se
             detail="Your company account is inactive. Please contact administrator.",
         )
 
-    roles = [r.code for r in user.roles] or ["company"]
-    access_token = create_access_token(
+    from ..tenant import get_tenant_profile
+    tenant_profile = get_tenant_profile(db, user)
+    company_id = tenant_profile.id if tenant_profile else getattr(user, "company_id", None)
+    company_name = tenant_profile.company_name if tenant_profile else None
+    user_role = getattr(user, "role", "company_admin")
+
+    from shared.utils import create_company_token
+    access_token = create_company_token(
         user_id=user.id,
+        company_id=company_id or 0,
         email=user.email,
-        user_type=user.user_type,
-        roles=roles,
+        role=user_role,
     )
     refresh_token = create_refresh_token(user.id)
 
@@ -130,17 +137,12 @@ def login_company_controller(data: CompanyLoginRequest, request: Request, db: Se
         db,
         action="LOGIN",
         module="COMPANY_AUTH",
-        description=f"Company recruiter logged in: {user.email}",
+        description=f"Company user logged in: {user.email}",
         user_id=user.id,
         user_email=user.email,
-        user_type=user.user_type,
+        user_type="company",
         request=request,
     )
-
-    from ..tenant import get_tenant_profile
-    tenant_profile = get_tenant_profile(db, user)
-    company_id = tenant_profile.id if tenant_profile else None
-    company_name = tenant_profile.company_name if tenant_profile else None
 
     return {
         "access_token": access_token,
@@ -150,7 +152,8 @@ def login_company_controller(data: CompanyLoginRequest, request: Request, db: Se
             "id": user.id,
             "email": user.email,
             "full_name": user.full_name,
-            "user_type": user.user_type,
+            "user_type": "company",
+            "role": user_role,
             "company_id": company_id,
             "company_name": company_name,
         },
@@ -225,19 +228,19 @@ def verify_otp_login_controller(data: VerifyOtpRequest, request: Request, db: Se
             detail="Your company account is inactive. Please contact administrator.",
         )
 
-    roles = [r.code for r in user.roles] or ["company"]
-    access_token = create_access_token(
-        user_id=user.id,
-        email=user.email,
-        user_type=user.user_type,
-        roles=roles,
-    )
-    refresh_token = create_refresh_token(user.id)
-
     from ..tenant import get_tenant_profile
     tenant_profile = get_tenant_profile(db, user)
-    company_id = tenant_profile.id if tenant_profile else None
+    company_id = tenant_profile.id if tenant_profile else getattr(user, "company_id", None)
     company_name = tenant_profile.company_name if tenant_profile else None
+    user_role = getattr(user, "role", None) or "company_admin"
+
+    access_token = create_company_token(
+        user_id=user.id,
+        company_id=company_id,
+        email=user.email,
+        role=user_role,
+    )
+    refresh_token = create_refresh_token(user.id)
 
     return {
         "access_token": access_token,
@@ -329,6 +332,46 @@ def get_invite_controller(db: Session, token: str) -> Dict[str, Any]:
 def activate_invite_controller(data: ActivateInviteRequest, db: Session) -> Dict[str, Any]:
     """Activate invited company team member."""
     return service.activate_invite_member(db, data.invite_token, data.name, data.password)
+
+
+def verify_team_invitation_controller(token: str, db: Session) -> Dict[str, Any]:
+    """Verify validity of employee invitation token."""
+    return service.verify_team_invitation(db, token)
+
+
+def accept_team_invitation_controller(data: Any, db: Session) -> Dict[str, Any]:
+    """Accept invitation, set password, create active CompanyUser, and return auth token."""
+    token = getattr(data, "token", None) or getattr(data, "invite_token", None)
+    password = data.password
+    first_name = getattr(data, "first_name", None)
+    last_name = getattr(data, "last_name", None)
+    name = getattr(data, "name", None)
+    if not first_name and name:
+        parts = name.strip().split(" ", 1)
+        first_name = parts[0]
+        last_name = parts[1] if len(parts) > 1 else ""
+    phone = getattr(data, "phone", None)
+
+    cu, access_token = service.accept_team_invitation(
+        db=db,
+        token=token,
+        password=password,
+        first_name=first_name,
+        last_name=last_name,
+        phone=phone,
+    )
+    return {
+        "id": cu.id,
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": {
+            "id": cu.id,
+            "email": cu.email,
+            "full_name": cu.full_name,
+            "company_id": cu.company_id,
+            "role": cu.role,
+        },
+    }
 
 
 def get_company_me_controller(user: User, db: Session) -> Dict[str, Any]:

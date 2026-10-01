@@ -71,7 +71,7 @@ def list_users(
 
 @router.get("/{user_id}", response_model=APIResponse[dict])
 def get_user_detail(
-    user_id: int,
+    user_id: str,
     current_admin: User = Depends(require_roles("super_admin", "admin")),
     db: Session = Depends(get_db),
 ):
@@ -99,7 +99,7 @@ def create_user(
 
 @router.put("/{user_id}", response_model=APIResponse[dict])
 def update_user(
-    user_id: int,
+    user_id: str,
     data: UserUpdateSchema,
     request: Request,
     current_admin: User = Depends(require_roles("super_admin", "admin")),
@@ -118,7 +118,7 @@ def update_user(
 
 @router.delete("/{user_id}", response_model=APIResponse[None])
 def toggle_or_delete_user(
-    user_id: int,
+    user_id: str,
     request: Request,
     current_admin: User = Depends(require_roles("super_admin")),
     db: Session = Depends(get_db),
@@ -136,7 +136,7 @@ def toggle_or_delete_user(
 
 @router.put("/{user_id}/roles", response_model=APIResponse[dict])
 def assign_user_roles(
-    user_id: int,
+    user_id: str,
     req: AssignRolesRequest,
     request: Request,
     current_admin: User = Depends(require_roles("super_admin")),

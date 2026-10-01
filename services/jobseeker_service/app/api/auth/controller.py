@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from shared.models import User
 from shared.utils import (
     create_access_token,
+    create_jobseeker_token,
     create_refresh_token,
     create_password_reset_token,
     decode_token,
@@ -57,11 +58,9 @@ def register_jobseeker_controller(data: JobSeekerRegisterRequest, request: Reque
     except Exception as e:
         logger.warning(f"Verification email sending failed: {e}")
 
-    access_token = create_access_token(
-        user_id=user.id,
+    access_token = create_jobseeker_token(
+        seeker_id=user.id,
         email=user.email,
-        user_type="jobseeker",
-        roles=["jobseeker"],
     )
     refresh_token = create_refresh_token(user.id)
 
@@ -110,12 +109,9 @@ def login_jobseeker_controller(data: JobSeekerLoginRequest, request: Request, db
             detail="Your account has been deactivated. Please contact support.",
         )
 
-    roles = [r.code for r in user.roles] or ["jobseeker"]
-    access_token = create_access_token(
-        user_id=user.id,
+    access_token = create_jobseeker_token(
+        seeker_id=user.id,
         email=user.email,
-        user_type=user.user_type,
-        roles=roles,
     )
     refresh_token = create_refresh_token(user.id)
 
@@ -134,11 +130,21 @@ def login_jobseeker_controller(data: JobSeekerLoginRequest, request: Request, db
         "access_token": access_token,
         "refresh_token": refresh_token,
         "token_type": "bearer",
+        "id": user.id,
+        "user_id": user.id,
+        "email": user.email,
+        "full_name": user.full_name,
+        "name": user.full_name,
+        "role": user.role_type,
+        "email_verified": user.is_verified,
         "user": {
             "id": user.id,
+            "user_id": user.id,
             "email": user.email,
             "full_name": user.full_name,
+            "name": user.full_name,
             "user_type": user.user_type,
+            "role": user.role_type,
             "avatar_url": user.avatar_url,
         },
     }
@@ -164,12 +170,16 @@ def get_me_controller(user: User) -> Dict[str, Any]:
         }
     return {
         "id": user.id,
+        "user_id": user.id,
         "email": user.email,
         "full_name": user.full_name,
+        "name": user.full_name,
         "phone": user.phone,
         "avatar_url": user.avatar_url,
         "user_type": user.user_type,
+        "role": user.role_type,
         "is_verified": user.is_verified,
+        "email_verified": user.is_verified,
         "profile": profile_data,
     }
 

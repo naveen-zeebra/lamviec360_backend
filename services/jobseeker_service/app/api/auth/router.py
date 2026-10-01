@@ -11,7 +11,7 @@ from shared.database.session import get_db
 from shared.models import User
 from shared.schemas import APIResponse
 from shared.utils import (
-    get_current_user,
+    get_current_jobseeker,
     get_current_active_user_optional,
     success_response,
     limiter,
@@ -61,7 +61,7 @@ def login_jobseeker(req: JobSeekerLoginRequest, request: Request, db: Session = 
 
 
 @router.get("/me", response_model=APIResponse[dict], summary="Get Current Job Seeker")
-def get_me(user: User = Depends(get_current_user)):
+def get_me(user: User = Depends(get_current_jobseeker)):
     return success_response(data=get_me_controller(user), message="User profile fetched")
 
 
@@ -73,7 +73,7 @@ def refresh_token(req: RefreshTokenRequest, db: Session = Depends(get_db)):
 @router.post("/change-password", response_model=APIResponse[None], summary="Change Password")
 def change_password(
     req: ChangePasswordRequest,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_jobseeker),
     db: Session = Depends(get_db),
 ):
     change_password_controller(req, user, db)

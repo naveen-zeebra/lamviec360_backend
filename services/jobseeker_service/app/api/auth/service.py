@@ -6,6 +6,7 @@
 import random
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any, Tuple
+from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from shared.models import User, JobSeekerProfile, Role
@@ -66,10 +67,15 @@ def create_jobseeker_user(
 
 @service_error_handler
 def authenticate_jobseeker(db: Session, email: str, password: str) -> Optional[User]:
-    """Authenticate credentials for jobseeker account."""
-    user = db.query(User).filter(User.email == email.lower()).first()
+    """Authenticate credentials specifically for candidate accounts."""
+    user = db.query(User).filter(User.email == email.lower(), User.is_deleted == False).first()
     if not user or not verify_password(password, user.hashed_password):
         return None
+    if user.role_type != "jobseeker":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied. Account is not a job seeker account.",
+        )
     return user
 
 

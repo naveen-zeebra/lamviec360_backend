@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from shared.environment import env
 from shared.utils.jwt import (
     create_access_token,
+    create_admin_token,
     create_refresh_token,
     decode_token,
 )
@@ -48,11 +49,10 @@ def admin_login_controller(data: AdminLoginRequest, request: Request, db: Sessio
     user_type = user.get("user_type", "super_admin")
     permissions = user.get("permissions", [])
 
-    access_token = create_access_token(
-        user_id=user_id,
+    access_token = create_admin_token(
+        admin_id=user_id,
         email=email,
-        user_type=user_type,
-        roles=roles,
+        role_code=roles[0] if roles else "super_admin",
         permissions=permissions,
     )
 
@@ -119,11 +119,10 @@ def refresh_token_controller(data: RefreshTokenRequest, db: Session) -> Dict[str
         )
 
     # Issue fresh access token
-    access_token = create_access_token(
-        user_id=user["id"],
+    access_token = create_admin_token(
+        admin_id=user["id"],
         email=user["email"],
-        user_type=user.get("user_type", "admin"),
-        roles=user.get("roles", []),
+        role_code=user.get("roles", ["super_admin"])[0],
         permissions=user.get("permissions", []),
     )
 

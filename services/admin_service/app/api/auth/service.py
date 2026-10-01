@@ -74,54 +74,8 @@ def admin_login_user(db: Session, email: str, password: str) -> Optional[Dict[st
             "is_superuser": admin.is_superuser,
         }
 
-    # 2. Fallback check for legacy administrative accounts in User table
-    user = db.query(User).filter(
-        User.email == email.lower(),
-        User.is_deleted == False,
-    ).first()
-
-    if not user or not verify_password(password, user.hashed_password):
-        return None
-
-    is_admin = user.is_superuser or user.user_type in ["super_admin", "admin"]
-    if not is_admin:
-        role_codes = [r.code for r in user.roles]
-        if not any(code in ["super_admin", "admin"] for code in role_codes):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access restricted to administrative staff only",
-            )
-
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin account is inactive",
-        )
-
-    roles = [r.code for r in user.roles] or [user.user_type]
-    permissions = []
-    for r in user.roles:
-        for p in r.permissions:
-            permissions.append(f"{p.module}:{p.action}")
-
-    user.last_login = datetime.utcnow()
-    db.commit()
-
-    return {
-        "id": user.id,
-        "email": user.email,
-        "first_name": user.first_name,
-        "last_name": user.last_name,
-        "full_name": user.full_name,
-        "role": roles[0] if roles else "admin",
-        "roles": roles,
-        "role_code": roles[0] if roles else "admin",
-        "user_type": user.user_type,
-        "permissions": list(set(permissions)),
-        "permissions_dict": {},
-        "avatar": user.avatar_url,
-        "is_superuser": user.is_superuser,
-    }
+    # Platform administrators are strictly authenticated against the admin_users table (Zero cross-system fallback)
+    return None
 
 
 @service_error_handler

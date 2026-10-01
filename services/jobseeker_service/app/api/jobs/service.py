@@ -7,7 +7,7 @@ from typing import Optional, List, Dict, Any, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, desc
 
-from shared.models import JobPosting
+from shared.models import JobPosting, JobReport
 from shared.utils.error_handler import service_error_handler
 from shared.utils.logger import get_logger
 
@@ -147,3 +147,52 @@ def get_job_and_increment_view(db: Session, job_id: int) -> Optional[JobPosting]
         db.commit()
         db.refresh(job)
     return job
+
+
+@service_error_handler
+def submit_job_report(
+    db: Session,
+    job_id: int,
+    reason: str,
+    details: Optional[str] = None,
+    reporter_name: Optional[str] = None,
+    reporter_email: Optional[str] = None,
+    user_id: Optional[int] = None,
+) -> Optional[Dict[str, Any]]:
+    """Submit a report/flag on a job posting and queue for admin moderation."""
+    job = db.query(JobPosting).filter(
+        JobPosting.id == job_id,
+        JobPosting.is_deleted == False,
+    ).first()
+
+    if not job:
+        return None
+
+    report = JobReport(
+        job_id=job.id,
+        user_id=user_id,
+        reporter_name=reporter_name or "Job Seeker",
+        reporter_email=reporter_email,
+        reason=reason,
+        details=details,
+        status="pending",
+    )
+    db.add(report)
+
+    # Flag job for admin review
+    job.moderation_status = "flagged"
+    job.moderation_notes = f"Flagged by {reporter_name or 'candidate'} ({reporter_email or 'anonymous'}): {reason}. Details: {details or 'No additional comment provided.'}"
+
+    db.commit()
+    db.refresh(report)
+    logger.info(f"Report submitted for job_id={job.id} reason='{reason}' report_id={report.id}")
+
+    return {
+        "report_id": report.id,
+        "job_id": job.id,
+        "reason": report.reason,
+        "status": report.status,
+        "message": "Report submitted successfully and queued for admin moderation review.",
+        "created_at": report.created_at.isoformat() if report.created_at else None,
+    }
+

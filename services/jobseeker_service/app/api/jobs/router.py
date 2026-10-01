@@ -4,16 +4,19 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 from typing import Optional
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.orm import Session
 
 from shared.database.session import get_db
+from shared.models import User
 from shared.schemas import PaginatedResponse, APIResponse
-from shared.utils import paginated_response, success_response
+from shared.utils import paginated_response, success_response, decode_token
 
+from .schemas import JobReportCreateSchema
 from .controller import (
     search_jobs_controller,
     get_job_details_controller,
+    create_job_report_controller,
 )
 
 router = APIRouter(prefix="/jobs", tags=["Job Search & Discovery"])
@@ -55,3 +58,28 @@ def search_jobs(
 def get_job_details(job_id: int, db: Session = Depends(get_db)):
     data = get_job_details_controller(job_id, db)
     return success_response(data=data)
+
+
+@router.post("/{job_id}/report", response_model=APIResponse[dict], summary="Report a Job Posting")
+def report_job(
+    job_id: int,
+    data: JobReportCreateSchema,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Submit a policy / compliance report on a job posting."""
+    current_user = None
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header.split(" ", 1)[1]
+        try:
+            payload = decode_token(token)
+            uid = payload.get("sub")
+            if uid:
+                current_user = db.query(User).filter(User.id == int(uid)).first()
+        except Exception:
+            pass
+
+    res = create_job_report_controller(job_id=job_id, data=data, db=db, current_user=current_user)
+    return success_response(data=res, message="Report submitted successfully")
+

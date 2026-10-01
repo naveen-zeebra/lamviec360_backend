@@ -15,6 +15,7 @@ from .schemas import JobModerationSchema
 from .controller import (
     list_jobs_controller,
     get_job_detail_controller,
+    get_job_reports_controller,
     moderate_job_controller,
     delete_job_controller,
 )
@@ -59,6 +60,17 @@ def get_job_detail(
     """Fetch complete detail of a job for moderation review."""
     data = get_job_detail_controller(db=db, job_id=job_id)
     return success_response(data=data)
+
+
+@router.get("/{job_id}/reports", response_model=APIResponse[list])
+def get_job_reports(
+    job_id: int,
+    current_admin: User = Depends(require_roles("super_admin", "admin")),
+    db: Session = Depends(get_db),
+):
+    """Fetch all candidate reports filed for a specific job."""
+    reports = get_job_reports_controller(db=db, job_id=job_id)
+    return success_response(data=reports, message="Job reports retrieved")
 
 
 @router.patch("/{job_id}/moderate", response_model=APIResponse[dict])

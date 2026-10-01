@@ -3,7 +3,7 @@
 # Purpose : Presentation layer (FastAPI endpoints) for Company Portal Auth
 # ─────────────────────────────────────────────────────────────────────────────
 
-from typing import Optional
+from typing import Optional, Any
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
@@ -11,6 +11,7 @@ from shared.database.session import get_db
 from shared.models import User
 from shared.schemas import APIResponse
 from shared.utils import (
+    get_current_company_user,
     get_current_user,
     get_current_active_user_optional,
     success_response,
@@ -28,6 +29,7 @@ from .schemas import (
     RefreshTokenRequest,
     ChangePasswordRequest,
 )
+from shared.schemas.company_team import InvitationAcceptRequest
 from .controller import (
     register_company_controller,
     login_company_controller,
@@ -116,8 +118,26 @@ def activate_team_invite(req: ActivateInviteRequest, db: Session = Depends(get_d
     )
 
 
+@router.get("/invitation/verify", response_model=APIResponse[dict], summary="Verify Team Invitation Token")
+def verify_team_invitation_endpoint(token: str, db: Session = Depends(get_db)):
+    from .controller import verify_team_invitation_controller
+    return success_response(
+        data=verify_team_invitation_controller(token, db),
+        message="Invitation is valid",
+    )
+
+
+@router.post("/invitation/accept", response_model=APIResponse[dict], summary="Accept Team Invitation and Set Password")
+def accept_team_invitation_endpoint(req: InvitationAcceptRequest, db: Session = Depends(get_db)):
+    from .controller import accept_team_invitation_controller
+    return success_response(
+        data=accept_team_invitation_controller(req, db),
+        message="Account activated successfully",
+    )
+
+
 @router.get("/me", response_model=APIResponse[dict], summary="Get Current Company User")
-def get_company_me(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_company_me(user: Any = Depends(get_current_company_user), db: Session = Depends(get_db)):
     return success_response(data=get_company_me_controller(user, db))
 
 
@@ -129,7 +149,7 @@ def refresh_token(req: RefreshTokenRequest, db: Session = Depends(get_db)):
 @router.post("/change-password", response_model=APIResponse[None], summary="Change Password")
 def change_password(
     req: ChangePasswordRequest,
-    user: User = Depends(get_current_user),
+    user: Any = Depends(get_current_company_user),
     db: Session = Depends(get_db),
 ):
     res = change_password_controller(req, user, db)

@@ -11,11 +11,11 @@ from typing import Optional, Dict, Any, Tuple
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 
-from shared.models import User, CompanyProfile, Role
+from shared.models import User, CompanyProfile, Role, CompanyUser, CompanyInvitation
 from shared.utils.error_handler import service_error_handler
 from shared.utils.password import hash_password, verify_password
 from shared.utils.logger import get_logger
-from shared.utils.jwt import create_access_token
+from shared.utils.jwt import create_access_token, create_company_token
 
 logger = get_logger("company_auth_service")
 
@@ -24,8 +24,11 @@ _VERIFICATION_CACHE: Dict[str, dict] = {}
 
 
 @service_error_handler
-def get_user_by_email(db: Session, email: str) -> Optional[User]:
-    """Look up a user by lowercased email."""
+def get_user_by_email(db: Session, email: str) -> Optional[Any]:
+    """Look up a user by lowercased email in CompanyUser or User."""
+    cu = db.query(CompanyUser).filter(CompanyUser.email == email.lower(), CompanyUser.is_deleted == False).first()
+    if cu:
+        return cu
     return db.query(User).filter(User.email == email.lower()).first()
 
 
@@ -42,7 +45,7 @@ def create_company_user_and_profile(
     website: Optional[str] = None,
     tax_code: Optional[str] = None,
 ) -> Tuple[User, CompanyProfile]:
-    """Create new company employer user and pending company profile."""
+    """Create new company employer user, company profile, and initial company admin user."""
     parts = (contact_name or company_name or "Representative").strip().split(" ", 1)
     first_name = parts[0]
     last_name = parts[1] if len(parts) > 1 else ""
@@ -74,21 +77,84 @@ def create_company_user_and_profile(
         verification_status="pending",
     )
     db.add(profile)
+    db.flush()
+
+    # Create corresponding CompanyUser admin
+    company_user = CompanyUser(
+        company_id=profile.id,
+        email=email.lower(),
+        password_hash=hash_password(password),
+        first_name=first_name,
+        last_name=last_name,
+        phone=phone,
+        role="company_admin",
+        is_active=True,
+        is_verified=False,
+    )
+    db.add(company_user)
+
     db.commit()
     db.refresh(user)
     db.refresh(profile)
+    db.refresh(company_user)
 
     logger.info(f"Created company user {email} and company profile {profile.company_name} (ID: {profile.id})")
     return user, profile
 
 
 @service_error_handler
-def authenticate_company_user(db: Session, email: str, password: str) -> Optional[User]:
-    """Validate credentials and return user if active."""
-    user = db.query(User).filter(User.email == email.lower()).first()
-    if not user or not verify_password(password, user.hashed_password):
-        return None
-    return user
+def authenticate_company_user(db: Session, email: str, password: str) -> Optional[Any]:
+    """
+    Validate credentials against CompanyUser table with fallback to legacy User table.
+    Enforces isolation: only returns accounts belonging to the company system.
+    """
+    clean_email = email.strip().lower()
+
+    # 1. Check dedicated CompanyUser table first
+    cu = db.query(CompanyUser).filter(
+        CompanyUser.email == clean_email,
+        CompanyUser.is_deleted == False,
+    ).first()
+    if cu and verify_password(password, cu.password_hash):
+        if cu.is_active:
+            cu.last_login = datetime.now(timezone.utc)
+            db.commit()
+        return cu
+
+    # 2. Fallback check User table for legacy company account
+    user = db.query(User).filter(
+        User.email == clean_email,
+        User.is_deleted == False,
+    ).first()
+    if user and verify_password(password, user.hashed_password):
+        if user.role_type == "company":
+            # Auto-provision CompanyUser if missing
+            profile = user.company_profile
+            if profile and not cu:
+                try:
+                    cu = CompanyUser(
+                        company_id=profile.id,
+                        email=user.email.lower(),
+                        password_hash=user.password_hash,
+                        first_name=user.first_name,
+                        last_name=user.last_name,
+                        phone=user.phone,
+                        role="company_admin",
+                        is_active=user.is_active,
+                        is_verified=user.is_verified,
+                        last_login=datetime.now(timezone.utc),
+                    )
+                    db.add(cu)
+                    db.commit()
+                    db.refresh(cu)
+                    return cu
+                except Exception as e:
+                    logger.warning(f"Could not auto-provision CompanyUser: {e}")
+            user.last_login = datetime.now(timezone.utc)
+            db.commit()
+            return user
+
+    return None
 
 
 def store_verification_code(email: str, code: Optional[str] = None, expiry_minutes: int = 15) -> str:
@@ -120,36 +186,82 @@ def clear_verification_code(email: str) -> None:
 
 
 @service_error_handler
-def mark_user_verified(db: Session, email: str) -> Optional[User]:
-    """Update user is_verified status to True."""
-    user = db.query(User).filter(User.email == email.lower()).first()
+def mark_user_verified(db: Session, email: str) -> Optional[Any]:
+    """Update user is_verified status to True in both CompanyUser and User."""
+    clean_email = email.lower()
+    cu = db.query(CompanyUser).filter(CompanyUser.email == clean_email).first()
+    if cu:
+        cu.is_verified = True
+
+    user = db.query(User).filter(User.email == clean_email).first()
     if user:
         user.is_verified = True
-        db.commit()
-        db.refresh(user)
-        logger.info(f"Marked company user {email} as verified")
-    return user
+
+    db.commit()
+    logger.info(f"Marked company user {email} as verified")
+    return cu or user
 
 
 @service_error_handler
-def get_company_user_by_id(db: Session, user_id: int) -> Optional[User]:
-    """Fetch user by id."""
+def get_company_user_by_id(db: Session, user_id: int) -> Optional[Any]:
+    """Fetch company user by id."""
+    cu = db.query(CompanyUser).filter(CompanyUser.id == user_id, CompanyUser.is_deleted == False).first()
+    if cu:
+        return cu
     return db.query(User).filter(User.id == user_id).first()
 
 
 @service_error_handler
-def change_company_user_password(db: Session, user: User, old_password: str, new_password: str) -> bool:
+def change_company_user_password(db: Session, user: Any, old_password: str, new_password: str) -> bool:
     """Verify current password and set new hashed password."""
-    if not verify_password(old_password, user.hashed_password):
+    current_hash = getattr(user, "password_hash", None) or getattr(user, "hashed_password", None)
+    if not current_hash or not verify_password(old_password, current_hash):
         return False
-    user.hashed_password = hash_password(new_password)
+
+    new_hash = hash_password(new_password)
+    if hasattr(user, "password_hash"):
+        user.password_hash = new_hash
+    if hasattr(user, "hashed_password"):
+        user.hashed_password = new_hash
+
     db.commit()
     logger.info(f"Password changed successfully for company user id={user.id}")
     return True
 
 
-def get_invite_details(db: Session, token: str) -> Dict[str, Any]:
-    """Return mock or persisted team invitation details."""
+@service_error_handler
+def verify_team_invitation(db: Session, token: str) -> Dict[str, Any]:
+    """Verify validity of employee invitation token from database or legacy settings."""
+    clean_token = token.strip()
+
+    # 1. Search persistent company_invitations table
+    inv = db.query(CompanyInvitation).filter(CompanyInvitation.invite_token == clean_token).first()
+    if inv:
+        if inv.status != "pending":
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invitation has already been {inv.status.lower()}")
+        expires_at = inv.expires_at
+        if expires_at and expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if expires_at and expires_at < datetime.now(timezone.utc):
+            inv.status = "expired"
+            db.commit()
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invitation has expired")
+
+        company_name = inv.company.company_name if inv.company else "Company"
+        return {
+            "valid": True,
+            "id": inv.id,
+            "email": inv.email,
+            "role": inv.role,
+            "company_id": inv.company_id,
+            "company_name": company_name,
+            "message": inv.message or "",
+            "token": inv.invite_token,
+            "status": inv.status,
+            "expires_at": inv.expires_at.isoformat() if inv.expires_at else None,
+        }
+
+    # 2. Fallback check legacy JSON invitations in CompanyProfile
     profiles = db.query(CompanyProfile).all()
     for profile in profiles:
         settings_str = profile.settings
@@ -158,102 +270,150 @@ def get_invite_details(db: Session, token: str) -> Dict[str, Any]:
                 settings = json.loads(settings_str)
             except Exception:
                 continue
-            invitations = settings.get("invitations", [])
-            for inv in invitations:
-                if inv.get("inviteToken") == token:
+            for inv_dict in settings.get("invitations", []):
+                if inv_dict.get("inviteToken") == clean_token:
                     return {
                         "valid": True,
-                        "email": inv.get("email"),
-                        "role": inv.get("role"),
+                        "email": inv_dict.get("email"),
+                        "role": inv_dict.get("role"),
                         "company_name": profile.company_name,
-                        "token": token,
-                        "message": inv.get("message", ""),
+                        "company_id": profile.id,
+                        "token": clean_token,
+                        "message": inv_dict.get("message", ""),
+                        "status": inv_dict.get("status", "Pending"),
                     }
-    return {
-        "valid": False,
-        "message": "Invitation not found or expired.",
-    }
+
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invitation not found or expired")
+
+
+@service_error_handler
+def accept_team_invitation(
+    db: Session,
+    token: str,
+    password: str,
+    first_name: Optional[str] = None,
+    last_name: Optional[str] = None,
+    phone: Optional[str] = None,
+) -> Tuple[CompanyUser, str]:
+    """Accept invitation, set password, create active CompanyUser, and return session token."""
+    clean_token = token.strip()
+    inv = db.query(CompanyInvitation).filter(CompanyInvitation.invite_token == clean_token).first()
+
+    company_id = None
+    email = None
+    role = "recruiter"
+    invited_by_id = None
+
+    if inv:
+        if inv.status != "pending":
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invitation has already been {inv.status.lower()}")
+        company_id = inv.company_id
+        email = inv.email.lower()
+        role = inv.role
+        invited_by_id = inv.invited_by_id
+        inv.status = "accepted"
+    else:
+        # Check legacy JSON invitations
+        profiles = db.query(CompanyProfile).all()
+        found_profile = None
+        for profile in profiles:
+            settings_str = profile.settings
+            if settings_str and isinstance(settings_str, str):
+                try:
+                    settings = json.loads(settings_str)
+                except Exception:
+                    continue
+                invitations = settings.get("invitations", [])
+                for i, inv_dict in enumerate(invitations):
+                    if inv_dict.get("inviteToken") == clean_token:
+                        found_profile = profile
+                        email = inv_dict.get("email", "").lower()
+                        role = inv_dict.get("role", "recruiter")
+                        del settings["invitations"][i]
+                        profile.settings = json.dumps(settings)
+                        break
+            if found_profile:
+                company_id = found_profile.id
+                break
+
+    if not company_id or not email:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invalid invitation token")
+
+    # Find or create CompanyUser
+    company_user = db.query(CompanyUser).filter(
+        CompanyUser.email == email,
+        CompanyUser.company_id == company_id,
+        CompanyUser.is_deleted == False,
+    ).first()
+
+    if company_user:
+        company_user.password_hash = hash_password(password)
+        if first_name: company_user.first_name = first_name
+        if last_name: company_user.last_name = last_name
+        if phone: company_user.phone = phone
+        company_user.role = role
+        company_user.is_active = True
+        company_user.is_verified = True
+        company_user.last_login = datetime.now(timezone.utc)
+    else:
+        company_user = CompanyUser(
+            company_id=company_id,
+            email=email,
+            password_hash=hash_password(password),
+            first_name=first_name,
+            last_name=last_name,
+            phone=phone,
+            role=role,
+            is_active=True,
+            is_verified=True,
+            last_login=datetime.now(timezone.utc),
+            invited_by_id=invited_by_id,
+        )
+        db.add(company_user)
+
+    db.commit()
+    db.refresh(company_user)
+
+    access_token = create_company_token(
+        user_id=company_user.id,
+        company_id=company_user.company_id,
+        email=company_user.email,
+        role=company_user.role,
+    )
+    logger.info(f"Team member {company_user.email} activated for company {company_user.company_id}")
+    return company_user, access_token
+
+
+def get_invite_details(db: Session, token: str) -> Dict[str, Any]:
+    """Compatibility wrapper for get_invite_details."""
+    try:
+        return verify_team_invitation(db, token)
+    except HTTPException:
+        return {"valid": False, "message": "Invitation not found or expired."}
 
 
 def activate_invite_member(db: Session, token: str, name: str, password: str) -> Dict[str, Any]:
-    """Activate invited team member."""
-    profiles = db.query(CompanyProfile).all()
-    found_profile = None
-    found_inv = None
-    settings = {}
-    for profile in profiles:
-        settings_str = profile.settings
-        if settings_str and isinstance(settings_str, str):
-            try:
-                settings = json.loads(settings_str)
-            except Exception:
-                continue
-            invitations = settings.get("invitations", [])
-            for i, inv in enumerate(invitations):
-                if inv.get("inviteToken") == token:
-                    found_profile = profile
-                    found_inv = inv
-                    del settings["invitations"][i]
-                    break
-        if found_profile:
-            break
-            
-    if not found_profile or not found_inv:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid invitation token")
-        
-    email = found_inv.get("email")
-    role_str = found_inv.get("role")
-    
-    team_members = settings.get("team_members", [])
-    
-    # Check if this email is already a member
-    already_member = any(m.get("email") == email for m in team_members)
-    if not already_member:
-        team_members.append({
-            "id": f"MEM-{int(time.time() * 1000)}",
-            "name": name,
-            "email": email,
-            "role": role_str,
-            "joined": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-            "status": "Active"
-        })
-        settings["team_members"] = team_members
-        found_profile.settings = json.dumps(settings)
-        db.commit()
+    """Compatibility wrapper for activate_invite_member."""
+    parts = (name or "Team Member").strip().split(" ", 1)
+    first_name = parts[0]
+    last_name = parts[1] if len(parts) > 1 else ""
 
-    # Create User if not exists
-    user = db.query(User).filter(User.email == email.lower()).first()
-    if not user:
-        company_role = db.query(Role).filter(Role.code == "company").first()
-        roles = [company_role] if company_role else []
-        
-        user = User(
-            email=email.lower(),
-            hashed_password=hash_password(password),
-            full_name=name,
-            user_type="company",
-            is_active=True,
-            is_verified=True,
-            roles=roles,
-        )
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-    else:
-        user.hashed_password = hash_password(password)
-        db.commit()
-
-    # Create token
-    roles_list = [r.code for r in user.roles] or ["company"]
-    access_token = create_access_token(
-        user_id=user.id,
-        email=user.email,
-        user_type=user.user_type,
-        roles=roles_list,
+    cu, access_token = accept_team_invitation(
+        db=db,
+        token=token,
+        password=password,
+        first_name=first_name,
+        last_name=last_name,
     )
-    
     return {
         "access_token": access_token,
         "token_type": "bearer",
-        "name": name,
+        "name": cu.full_name,
+        "user": {
+            "id": cu.id,
+            "email": cu.email,
+            "full_name": cu.full_name,
+            "company_id": cu.company_id,
+            "role": cu.role,
+        }
     }

@@ -1,5 +1,6 @@
 import sys
 import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
@@ -16,6 +17,8 @@ from shared.models import (
     AdminUser,
     AdminRole,
     AdminRolePermission,
+    CompanyUser,
+    CompanyInvitation,
 )
 from shared.utils.password import hash_password
 from shared.utils.logger import get_logger
@@ -249,6 +252,51 @@ def seed_database(db: Session = None):
                 techcorp_profile.settings = techcorp_settings
             db.flush()
 
+        # Seed Company Users for Tenant 1 (TechCorp Global)
+        techcorp_team_data = [
+            ("company@techcorp.com", "Company@123", "David", "Nguyen", "+84 28 3910 1122", "company_admin"),
+            ("recruiter@techcorp.com", "Recruiter@123", "Sarah", "Jenkins", "+84 28 3910 1123", "recruiter"),
+            ("hiring@techcorp.com", "Hiring@123", "Alex", "Wong", "+84 28 3910 1124", "hiring_manager"),
+        ]
+        techcorp_admin_cu = None
+        for email, pwd, fname, lname, phone, role in techcorp_team_data:
+            cu = db.query(CompanyUser).filter_by(company_id=techcorp_profile.id, email=email).first()
+            if not cu:
+                cu = CompanyUser(
+                    company_id=techcorp_profile.id,
+                    email=email,
+                    password_hash=hash_password(pwd),
+                    first_name=fname,
+                    last_name=lname,
+                    phone=phone,
+                    role=role,
+                    is_active=True,
+                    is_verified=True,
+                )
+                db.add(cu)
+                db.flush()
+                logger.info(f"Created CompanyUser for Tenant 1: {email} ({role})")
+            if role == "company_admin":
+                techcorp_admin_cu = cu
+
+        # Seed sample invitation for Tenant 1
+        techcorp_inv_email = "candidate.interviewer@techcorp.com"
+        techcorp_inv = db.query(CompanyInvitation).filter_by(company_id=techcorp_profile.id, email=techcorp_inv_email).first()
+        if not techcorp_inv:
+            techcorp_inv = CompanyInvitation(
+                company_id=techcorp_profile.id,
+                email=techcorp_inv_email,
+                role="interviewer",
+                invite_token="techcorp-demo-invite-token",
+                message="Welcome to TechCorp Global recruiting team!",
+                status="pending",
+                invited_by_id=techcorp_admin_cu.id if techcorp_admin_cu else None,
+                expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+            )
+            db.add(techcorp_inv)
+            db.flush()
+            logger.info("Created demo CompanyInvitation for Tenant 1")
+
         # =====================================================================
         # 6. SEED TENANT 2: ABC Technologies (lan.tran@abctech.vn / password123)
         # =====================================================================
@@ -341,6 +389,29 @@ def seed_database(db: Session = None):
             if not abctech_profile.settings:
                 abctech_profile.settings = abctech_settings
             db.flush()
+
+        # Seed Company Users for Tenant 2 (ABC Technologies)
+        abctech_team_data = [
+            ("lan.tran@abctech.vn", "password123", "Lan", "Tran", "+84 24 3788 5678", "company_admin"),
+            ("recruiter@abctech.vn", "password123", "Tuan", "Nguyen", "+84 24 3788 5679", "recruiter"),
+        ]
+        for email, pwd, fname, lname, phone, role in abctech_team_data:
+            cu = db.query(CompanyUser).filter_by(company_id=abctech_profile.id, email=email).first()
+            if not cu:
+                cu = CompanyUser(
+                    company_id=abctech_profile.id,
+                    email=email,
+                    password_hash=hash_password(pwd),
+                    first_name=fname,
+                    last_name=lname,
+                    phone=phone,
+                    role=role,
+                    is_active=True,
+                    is_verified=True,
+                )
+                db.add(cu)
+                db.flush()
+                logger.info(f"Created CompanyUser for Tenant 2: {email} ({role})")
 
         # =====================================================================
         # 7. SEED DEMO JOB SEEKERS

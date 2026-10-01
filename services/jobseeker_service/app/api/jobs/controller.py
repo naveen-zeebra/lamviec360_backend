@@ -44,3 +44,29 @@ def get_job_details_controller(job_id: int, db: Session) -> Dict[str, Any]:
     if not job:
         raise HTTPException(status_code=404, detail="Job posting not found")
     return service.serialize_job_detail(job)
+
+
+def create_job_report_controller(
+    job_id: int,
+    data: Any,
+    db: Session,
+    current_user: Optional[Any] = None,
+) -> Dict[str, Any]:
+    """Handle candidate reporting a job posting."""
+    reporter_name = getattr(current_user, "full_name", None) or getattr(data, "reporter_name", None) or "Job Seeker"
+    reporter_email = getattr(current_user, "email", None) or getattr(data, "reporter_email", None)
+    user_id = getattr(current_user, "id", None)
+
+    res = service.submit_job_report(
+        db=db,
+        job_id=job_id,
+        reason=data.reason,
+        details=data.details,
+        reporter_name=reporter_name,
+        reporter_email=reporter_email,
+        user_id=user_id,
+    )
+    if not res:
+        raise HTTPException(status_code=404, detail="Job posting not found")
+    return res
+

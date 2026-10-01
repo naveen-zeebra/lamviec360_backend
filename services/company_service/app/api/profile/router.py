@@ -3,13 +3,13 @@
 # Purpose : Presentation layer (FastAPI endpoints) for Company Profile
 # ─────────────────────────────────────────────────────────────────────────────
 
+from typing import Any
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from shared.database.session import get_db
-from shared.models import User
 from shared.schemas import APIResponse
-from shared.utils import require_user_type, success_response
+from shared.utils import get_current_company_user, success_response
 
 from .schemas import CompanyProfileUpdateSchema
 from .controller import (
@@ -22,7 +22,7 @@ router = APIRouter(prefix="/profile", tags=["Company Profile"])
 
 @router.get("", response_model=APIResponse[dict], summary="Get Company Profile")
 def get_company_profile(
-    user: User = Depends(require_user_type("company", "super_admin")),
+    user: Any = Depends(get_current_company_user),
     db: Session = Depends(get_db),
 ):
     return success_response(data=get_company_profile_controller(user, db))
@@ -31,7 +31,7 @@ def get_company_profile(
 @router.put("", response_model=APIResponse[dict], summary="Update Company Profile")
 def update_company_profile(
     data: CompanyProfileUpdateSchema,
-    user: User = Depends(require_user_type("company", "super_admin")),
+    user: Any = Depends(get_current_company_user),
     db: Session = Depends(get_db),
 ):
     return success_response(

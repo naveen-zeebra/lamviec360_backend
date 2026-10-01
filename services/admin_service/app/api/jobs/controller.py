@@ -14,6 +14,7 @@ from .schemas import JobModerationSchema
 from .service import (
     list_jobs,
     get_job_by_id,
+    get_job_reports,
     moderate_job_post,
     soft_delete_job_post,
     serialize_admin_job_detail,
@@ -72,6 +73,7 @@ def moderate_job_controller(
         job=job,
         moderation_status=data.moderation_status,
         moderation_notes=data.moderation_notes,
+        admin_email=current_admin.email,
     )
 
     log_audit_event(
@@ -85,7 +87,18 @@ def moderate_job_controller(
         request=request,
     )
 
-    return {"id": updated.id, "moderation_status": updated.moderation_status}
+    return {"id": updated.id, "moderation_status": updated.moderation_status, "status": updated.status}
+
+
+def get_job_reports_controller(db: Session, job_id: int) -> List[Dict[str, Any]]:
+    """Retrieve all candidate reports filed for a specific job."""
+    job = get_job_by_id(db, job_id)
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job with ID {job_id} not found",
+        )
+    return get_job_reports(db, job_id)
 
 
 def delete_job_controller(

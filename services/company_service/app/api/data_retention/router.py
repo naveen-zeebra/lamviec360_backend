@@ -3,13 +3,13 @@
 # Purpose : Presentation layer (FastAPI endpoints) for Company Data Retention
 # ─────────────────────────────────────────────────────────────────────────────
 
+from typing import Any
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from shared.database.session import get_db
-from shared.models import User
 from shared.schemas import APIResponse
-from shared.utils import require_user_type, success_response
+from shared.utils import get_current_company_user, success_response
 
 from .controller import purge_company_data_controller
 
@@ -19,7 +19,7 @@ router = APIRouter(prefix="/data-retention", tags=["Data Retention"])
 @router.post("/purge", response_model=APIResponse[dict], summary="Purge Expired Candidate Data")
 def purge_company_data(
     months: int = Query(6, ge=1, description="Threshold in months to purge candidate applications"),
-    user: User = Depends(require_user_type("company", "super_admin")),
+    user: Any = Depends(get_current_company_user),
     db: Session = Depends(get_db),
 ):
     result = purge_company_data_controller(months, user, db)

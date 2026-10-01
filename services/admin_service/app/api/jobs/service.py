@@ -3,11 +3,12 @@
 # Purpose : Domain & database logic for Admin Job Moderation
 # ─────────────────────────────────────────────────────────────────────────────
 
+from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 
-from shared.models import JobPosting
+from shared.models import JobPosting, JobReport
 from shared.utils.error_handler import service_error_handler
 from shared.utils.logger import get_logger
 
@@ -15,31 +16,34 @@ logger = get_logger("admin_jobs_service")
 
 
 def serialize_admin_job_item(j: JobPosting) -> Dict[str, Any]:
-    """Serialize job posting for list moderation view."""
-    return {
-        "id": j.id,
-        "title": j.title,
-        "company_name": j.company.company_name if j.company else "Unknown",
-        "job_type": j.job_type,
-        "workplace_type": j.workplace_type,
-        "experience_level": j.experience_level,
-        "city": j.city,
-        "status": j.status,
-        "moderation_status": j.moderation_status,
-        "views_count": j.views_count,
-        "applications_count": j.applications_count,
-        "created_at": j.created_at.isoformat() if j.created_at else None,
-    }
+    """Serialize job posting for moderation list and review."""
+    reports_list = []
+    if hasattr(j, "reports") and j.reports:
+        reports_list = [
+            {
+                "id": r.id,
+                "reporter_name": r.reporter_name,
+                "reporter_email": r.reporter_email,
+                "reason": r.reason,
+                "details": r.details,
+                "status": r.status,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in j.reports
+        ]
 
-
-def serialize_admin_job_detail(j: JobPosting) -> Dict[str, Any]:
-    """Serialize full job details for moderation review."""
     return {
         "id": j.id,
         "title": j.title,
         "description": j.description,
         "requirements": j.requirements,
         "benefits": j.benefits,
+        "company_name": j.company.company_name if j.company else "Unknown",
+        "company": {
+            "id": j.company.id,
+            "name": j.company.company_name,
+            "verification_status": j.company.verification_status,
+        } if j.company else None,
         "job_type": j.job_type,
         "workplace_type": j.workplace_type,
         "experience_level": j.experience_level,
@@ -51,15 +55,18 @@ def serialize_admin_job_detail(j: JobPosting) -> Dict[str, Any]:
         "status": j.status,
         "moderation_status": j.moderation_status,
         "moderation_notes": j.moderation_notes,
+        "reports_count": len(reports_list),
+        "reports": reports_list,
         "views_count": j.views_count,
         "applications_count": j.applications_count,
         "created_at": j.created_at.isoformat() if j.created_at else None,
-        "company": {
-            "id": j.company.id,
-            "name": j.company.company_name,
-            "verification_status": j.company.verification_status,
-        } if j.company else None,
     }
+
+
+def serialize_admin_job_detail(j: JobPosting) -> Dict[str, Any]:
+    """Serialize full job details for moderation review."""
+    return serialize_admin_job_item(j)
+
 
 
 @service_error_handler
@@ -104,16 +111,67 @@ def moderate_job_post(
     job: JobPosting,
     moderation_status: str,
     moderation_notes: Optional[str] = None,
+    admin_email: Optional[str] = None,
 ) -> JobPosting:
-    """Update moderation status and notes for a job post."""
+    """Update moderation status and notes for a job post, and resolve any pending reports."""
     job.moderation_status = moderation_status
     if moderation_notes is not None:
         job.moderation_notes = moderation_notes
+
+    now = datetime.now(timezone.utc)
+
+    # Sync job status and reports based on moderation outcome
+    if moderation_status in ("approved", "dismissed"):
+        job.moderation_status = "approved"
+        if job.status in ("closed", "draft", "flagged"):
+            job.status = "published"
+        if hasattr(job, "reports") and job.reports:
+            for r in job.reports:
+                if r.status == "pending":
+                    r.status = "dismissed"
+                    r.action_note = moderation_notes or "Dismissed by admin"
+                    r.actioned_by = admin_email
+                    r.actioned_at = now
+    elif moderation_status in ("rejected", "actioned", "taken_down"):
+        job.moderation_status = "rejected"
+        job.status = "closed"
+        if hasattr(job, "reports") and job.reports:
+            for r in job.reports:
+                if r.status == "pending":
+                    r.status = "actioned"
+                    r.action_note = moderation_notes or "Action taken: listing closed by admin"
+                    r.actioned_by = admin_email
+                    r.actioned_at = now
+    elif moderation_status == "flagged":
+        job.moderation_status = "flagged"
 
     db.commit()
     db.refresh(job)
     logger.info(f"Admin moderated job id={job.id} status={moderation_status}")
     return job
+
+
+@service_error_handler
+def get_job_reports(db: Session, job_id: int) -> List[Dict[str, Any]]:
+    """Retrieve all reports for a specific job."""
+    reports = db.query(JobReport).filter(JobReport.job_id == job_id).order_by(desc(JobReport.created_at)).all()
+    return [
+        {
+            "id": r.id,
+            "job_id": r.job_id,
+            "user_id": r.user_id,
+            "reporter_name": r.reporter_name,
+            "reporter_email": r.reporter_email,
+            "reason": r.reason,
+            "details": r.details,
+            "status": r.status,
+            "action_note": r.action_note,
+            "actioned_by": r.actioned_by,
+            "actioned_at": r.actioned_at.isoformat() if r.actioned_at else None,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        }
+        for r in reports
+    ]
 
 
 @service_error_handler
