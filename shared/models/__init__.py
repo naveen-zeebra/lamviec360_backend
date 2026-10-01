@@ -7,6 +7,7 @@ from shared.models.company_user import CompanyUser, CompanyInvitation
 from shared.models.job import JobPosting, JobReport
 from shared.models.application import JobApplication
 from shared.models.audit_log import AuditLog
+from shared.models.notification import Notification
 from shared.models.admin_user import (
     AdminUser,
     AdminRole,
@@ -32,6 +33,7 @@ __all__ = [
     "JobReport",
     "JobApplication",
     "AuditLog",
+    "Notification",
     "AdminUser",
     "AdminRole",
     "AdminRolePermission",

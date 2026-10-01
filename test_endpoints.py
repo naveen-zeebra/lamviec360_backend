@@ -62,6 +62,11 @@ def run_tests():
         }, headers=seeker_headers)
         print(f"  [PASS] POST /api/v1/jobseeker/applications -> {res.status_code}")
 
+    # Notifications
+    res = client_seeker.get("/api/v1/jobseeker/notifications", headers=seeker_headers)
+    assert res.status_code == 200, f"Get notifications failed: {res.text}"
+    print(f"  [PASS] GET /api/v1/jobseeker/notifications -> 200 OK ({len(res.json()['data'])} notifications)")
+
     # -------------------------------------------------------------------------
     # 3. Test Company Gateway (Port 8002)
     # -------------------------------------------------------------------------

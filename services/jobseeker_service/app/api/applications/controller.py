@@ -41,6 +41,21 @@ def apply_for_job_controller(
         resume_url=data.resume_url,
     )
 
+    try:
+        from shared.models.notification import Notification
+        notif = Notification(
+            user_id=user.id,
+            title="Application submitted",
+            message=f"Your application for {job.title} was received.",
+            type="confirmation",
+            application_id=app.id,
+            read=False,
+        )
+        db.add(notif)
+        db.commit()
+    except Exception as notif_err:
+        logger.warning(f"Could not create notification for application: {notif_err}")
+
     log_audit_event(
         db,
         action="APPLY",
