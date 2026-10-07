@@ -82,4 +82,21 @@ class EnvironmentConfig:
     COMPANY_WEB_URL: str = os.getenv("COMPANY_WEB_URL", "http://localhost:3001").strip().strip("'\"")
     ADMIN_WEB_URL: str = os.getenv("ADMIN_WEB_URL", "http://localhost:3002").strip().strip("'\"")
 
+    # OAuth Identity Providers (Google, Zalo, LinkedIn, Facebook)
+    GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "").strip().strip("'\"")
+    GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET", "").strip().strip("'\"")
+    GOOGLE_REDIRECT_URI: str = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:3001/oauth-callback?provider=google").strip().strip("'\"")
+
+    ZALO_APP_ID: str = os.getenv("ZALO_APP_ID", "").strip().strip("'\"")
+    ZALO_APP_SECRET: str = os.getenv("ZALO_APP_SECRET", "").strip().strip("'\"")
+    ZALO_REDIRECT_URI: str = os.getenv("ZALO_REDIRECT_URI", "http://localhost:3001/oauth-callback?provider=zalo").strip().strip("'\"")
+
+    LINKEDIN_CLIENT_ID: str = os.getenv("LINKEDIN_CLIENT_ID", "").strip().strip("'\"")
+    LINKEDIN_CLIENT_SECRET: str = os.getenv("LINKEDIN_CLIENT_SECRET", "").strip().strip("'\"")
+    LINKEDIN_REDIRECT_URI: str = os.getenv("LINKEDIN_REDIRECT_URI", "http://localhost:3001/oauth-callback?provider=linkedin").strip().strip("'\"")
+
+    FACEBOOK_APP_ID: str = os.getenv("FACEBOOK_APP_ID", "").strip().strip("'\"")
+    FACEBOOK_APP_SECRET: str = os.getenv("FACEBOOK_APP_SECRET", "").strip().strip("'\"")
+    FACEBOOK_REDIRECT_URI: str = os.getenv("FACEBOOK_REDIRECT_URI", "http://localhost:3001/oauth-callback?provider=facebook").strip().strip("'\"")
+
 env = EnvironmentConfig()

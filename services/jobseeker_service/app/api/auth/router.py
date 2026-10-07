@@ -26,6 +26,11 @@ from .schemas import (
     VerifyEmailRequest,
     ForgotPasswordRequest,
     ResetPasswordRequest,
+    OAuthLoginRequest,
+    GoogleLoginRequest,
+    ZaloLoginRequest,
+    LinkedInLoginRequest,
+    FacebookLoginRequest,
 )
 from .controller import (
     register_jobseeker_controller,
@@ -37,6 +42,9 @@ from .controller import (
     verify_email_controller,
     forgot_password_controller,
     reset_password_controller,
+    oauth_login_controller,
+    get_oauth_url_controller,
+    get_oauth_providers_controller,
 )
 
 router = APIRouter(prefix="/auth", tags=["Job Seeker Auth"])
@@ -120,4 +128,110 @@ def reset_password(req: ResetPasswordRequest, request: Request, db: Session = De
     reset_password_controller(req, request, db)
     return success_response(
         message="Password updated successfully. You can now login with your new password.",
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# OAuth Endpoints (Google, Zalo, LinkedIn, Facebook)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.get("/oauth/providers", response_model=APIResponse[list], summary="Get Available OAuth Providers")
+def get_oauth_providers():
+    return success_response(
+        data=get_oauth_providers_controller(),
+        message="Available OAuth providers retrieved",
+    )
+
+
+@router.get("/oauth/{provider}/url", response_model=APIResponse[dict], summary="Get OAuth Authorization URL")
+def get_oauth_url(provider: str, redirect_uri: Optional[str] = None, state: Optional[str] = None):
+    return success_response(
+        data=get_oauth_url_controller(provider, redirect_uri, state),
+        message=f"{provider.capitalize()} authorization URL generated",
+    )
+
+
+@router.post("/oauth/login", response_model=APIResponse[dict], summary="Unified OAuth Login/Register")
+@limiter.limit("20/minute")
+def oauth_login(req: OAuthLoginRequest, request: Request, db: Session = Depends(get_db)):
+    return success_response(
+        data=oauth_login_controller(req, request, db),
+        message=f"Logged in successfully via {req.provider.capitalize()}",
+    )
+
+
+@router.post("/google", response_model=APIResponse[dict], summary="Google OAuth Login")
+@limiter.limit("20/minute")
+def google_login(req: GoogleLoginRequest, request: Request, db: Session = Depends(get_db)):
+    oauth_req = OAuthLoginRequest(
+        provider="google",
+        token=req.token,
+        code=req.code,
+        redirect_uri=req.redirect_uri,
+        email=req.email,
+        name=req.name,
+        avatar_url=req.avatar_url,
+        provider_user_id=req.google_id,
+    )
+    return success_response(
+        data=oauth_login_controller(oauth_req, request, db),
+        message="Logged in successfully via Google",
+    )
+
+
+@router.post("/zalo", response_model=APIResponse[dict], summary="Zalo OAuth Login")
+@limiter.limit("20/minute")
+def zalo_login(req: ZaloLoginRequest, request: Request, db: Session = Depends(get_db)):
+    oauth_req = OAuthLoginRequest(
+        provider="zalo",
+        token=req.token,
+        code=req.code,
+        redirect_uri=req.redirect_uri,
+        code_verifier=req.code_verifier,
+        email=req.email,
+        name=req.name,
+        avatar_url=req.avatar_url,
+        provider_user_id=req.zalo_id,
+    )
+    return success_response(
+        data=oauth_login_controller(oauth_req, request, db),
+        message="Logged in successfully via Zalo",
+    )
+
+
+@router.post("/linkedin", response_model=APIResponse[dict], summary="LinkedIn OAuth Login")
+@limiter.limit("20/minute")
+def linkedin_login(req: LinkedInLoginRequest, request: Request, db: Session = Depends(get_db)):
+    oauth_req = OAuthLoginRequest(
+        provider="linkedin",
+        token=req.token,
+        code=req.code,
+        redirect_uri=req.redirect_uri,
+        email=req.email,
+        name=req.name,
+        avatar_url=req.avatar_url,
+        provider_user_id=req.linkedin_id,
+    )
+    return success_response(
+        data=oauth_login_controller(oauth_req, request, db),
+        message="Logged in successfully via LinkedIn",
+    )
+
+
+@router.post("/facebook", response_model=APIResponse[dict], summary="Facebook OAuth Login")
+@limiter.limit("20/minute")
+def facebook_login(req: FacebookLoginRequest, request: Request, db: Session = Depends(get_db)):
+    oauth_req = OAuthLoginRequest(
+        provider="facebook",
+        token=req.token,
+        code=req.code,
+        redirect_uri=req.redirect_uri,
+        email=req.email,
+        name=req.name,
+        avatar_url=req.avatar_url,
+        provider_user_id=req.facebook_id,
+    )
+    return success_response(
+        data=oauth_login_controller(oauth_req, request, db),
+        message="Logged in successfully via Facebook",
     )

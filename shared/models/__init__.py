@@ -1,6 +1,7 @@
 from shared.database.base import Base, TimestampMixin, SoftDeleteMixin
 from shared.models.role import Role, RolePermission, user_roles
 from shared.models.user import User
+from shared.models.oauth_account import OAuthAccount
 from shared.models.jobseeker import JobSeekerProfile, SavedJob
 from shared.models.company import CompanyProfile
 from shared.models.company_user import CompanyUser, CompanyInvitation
@@ -24,6 +25,7 @@ __all__ = [
     "RolePermission",
     "user_roles",
     "User",
+    "OAuthAccount",
     "JobSeekerProfile",
     "SavedJob",
     "CompanyProfile",

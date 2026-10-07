@@ -3,7 +3,7 @@
 # Purpose : Orchestration layer for Job Seeker Authentication
 # ─────────────────────────────────────────────────────────────────────────────
 
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from fastapi import HTTPException, Request, status
 from sqlalchemy.orm import Session
 
@@ -30,6 +30,11 @@ from .schemas import (
     VerifyEmailRequest,
     ForgotPasswordRequest,
     ResetPasswordRequest,
+    OAuthLoginRequest,
+    GoogleLoginRequest,
+    ZaloLoginRequest,
+    LinkedInLoginRequest,
+    FacebookLoginRequest,
 )
 
 logger = get_logger("jobseeker_auth_controller")
@@ -329,3 +334,87 @@ def reset_password_controller(data: ResetPasswordRequest, request: Request, db: 
         user_type=user.user_type,
         request=request,
     )
+
+
+def oauth_login_controller(data: OAuthLoginRequest, request: Request, db: Session) -> Dict[str, Any]:
+    """
+    Authenticate or register candidate via OAuth (Google, Zalo, LinkedIn, Facebook).
+    Supports LV-BR-0037 auto-linking to existing accounts.
+    """
+    provider = data.provider.lower()
+
+    # 1. Resolve and verify OAuth credentials & profile
+    oauth_info = service.verify_oauth_credentials(
+        provider=provider,
+        code=data.code,
+        token=data.token,
+        redirect_uri=data.redirect_uri,
+        code_verifier=data.code_verifier,
+        fallback_email=data.email,
+        fallback_name=data.name,
+        fallback_avatar=data.avatar_url,
+        fallback_id=data.provider_user_id,
+    )
+
+    # 2. Authenticate or create user in database
+    user, is_new_user, is_auto_linked = service.authenticate_or_register_oauth_user(db, oauth_info)
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This account has been deactivated. Please contact support.",
+        )
+
+    # 3. Issue authentication JWT tokens
+    access_token = create_jobseeker_token(seeker_id=user.id, email=user.email)
+    refresh_token = create_refresh_token(user.id)
+
+    # 4. Log audit event
+    action_type = "OAUTH_REGISTER" if is_new_user else ("OAUTH_AUTO_LINK" if is_auto_linked else "OAUTH_LOGIN")
+    description = (
+        f"Registered new jobseeker via {provider} ({user.email})"
+        if is_new_user
+        else (
+            f"Auto-linked {provider} account to existing user ({user.email}) per LV-BR-0037"
+            if is_auto_linked
+            else f"Jobseeker logged in via {provider} ({user.email})"
+        )
+    )
+
+    log_audit_event(
+        db,
+        action=action_type,
+        module="JOBSEEKER_AUTH",
+        description=description,
+        user_id=user.id,
+        user_email=user.email,
+        user_type="jobseeker",
+        request=request,
+    )
+
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "is_new_user": is_new_user,
+        "is_auto_linked": is_auto_linked,
+        "provider": provider,
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "full_name": user.full_name,
+            "avatar_url": user.avatar_url,
+            "user_type": user.user_type,
+            "is_verified": user.is_verified,
+        },
+    }
+
+
+def get_oauth_url_controller(provider: str, redirect_uri: Optional[str] = None, state: Optional[str] = None) -> Dict[str, Any]:
+    """Retrieve official authorization redirect URL for an OAuth provider."""
+    return service.get_oauth_authorization_url(provider=provider, redirect_uri=redirect_uri, state=state)
+
+
+def get_oauth_providers_controller() -> List[Dict[str, Any]]:
+    """Retrieve list of supported OAuth providers."""
+    return service.get_oauth_providers_config()

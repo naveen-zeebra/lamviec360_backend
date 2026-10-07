@@ -241,8 +241,18 @@ def get_current_jobseeker(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job seeker account not found")
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Job seeker account is deactivated")
-    if user.role_type != "jobseeker":
+
+    has_seeker_role = any(r.code == "jobseeker" for r in user.roles)
+    if user.role_type != "jobseeker" and not has_seeker_role and not user.jobseeker_profile:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a job seeker account")
+
+    if not user.jobseeker_profile:
+        from shared.models.jobseeker import JobSeekerProfile
+        profile = JobSeekerProfile(user_id=user.id)
+        db.add(profile)
+        db.commit()
+        db.refresh(user)
+
     return user
 
 

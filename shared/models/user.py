@@ -24,6 +24,7 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
     roles = relationship("Role", secondary=user_roles, back_populates="users")
     jobseeker_profile = relationship("JobSeekerProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
     company_profile = relationship("CompanyProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    oauth_accounts = relationship("OAuthAccount", back_populates="user", cascade="all, delete-orphan")
 
     def __init__(self, **kwargs):
         # Support aliases

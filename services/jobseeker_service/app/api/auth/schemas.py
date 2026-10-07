@@ -81,3 +81,89 @@ class ResetPasswordRequest(BaseModel):
     @classmethod
     def normalize_email(cls, v: Optional[str]) -> Optional[str]:
         return v.strip().lower() if v else None
+
+
+class OAuthLoginRequest(BaseModel):
+    provider: str = Field(..., description="Provider: google, zalo, linkedin, facebook")
+    token: Optional[str] = Field(None, description="Client token (access_token or id_token)")
+    code: Optional[str] = Field(None, description="OAuth authorization code")
+    redirect_uri: Optional[str] = Field(None, description="OAuth redirect URI used during code request")
+    code_verifier: Optional[str] = Field(None, description="PKCE code verifier if applicable")
+    email: Optional[EmailStr] = Field(None, description="User email (if provided directly or client-verified)")
+    name: Optional[str] = Field(None, description="User full name")
+    avatar_url: Optional[str] = Field(None, description="User avatar image URL")
+    provider_user_id: Optional[str] = Field(None, description="Provider unique user identifier")
+
+    @field_validator("provider")
+    @classmethod
+    def validate_provider(cls, v: str) -> str:
+        clean = (v or "").strip().lower()
+        if clean not in ("google", "zalo", "linkedin", "facebook"):
+            raise ValueError(f"Unsupported OAuth provider: {v}. Must be google, zalo, linkedin, or facebook.")
+        return clean
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, v: Optional[str]) -> Optional[str]:
+        return v.strip().lower() if v else None
+
+
+class GoogleLoginRequest(BaseModel):
+    token: Optional[str] = None
+    code: Optional[str] = None
+    redirect_uri: Optional[str] = None
+    email: Optional[EmailStr] = None
+    name: Optional[str] = None
+    avatar_url: Optional[str] = None
+    google_id: Optional[str] = None
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, v: Optional[str]) -> Optional[str]:
+        return v.strip().lower() if v else None
+
+
+class ZaloLoginRequest(BaseModel):
+    token: Optional[str] = None
+    code: Optional[str] = None
+    code_verifier: Optional[str] = None
+    redirect_uri: Optional[str] = None
+    email: Optional[EmailStr] = None
+    name: Optional[str] = None
+    avatar_url: Optional[str] = None
+    zalo_id: Optional[str] = None
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, v: Optional[str]) -> Optional[str]:
+        return v.strip().lower() if v else None
+
+
+class LinkedInLoginRequest(BaseModel):
+    token: Optional[str] = None
+    code: Optional[str] = None
+    redirect_uri: Optional[str] = None
+    email: Optional[EmailStr] = None
+    name: Optional[str] = None
+    avatar_url: Optional[str] = None
+    linkedin_id: Optional[str] = None
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, v: Optional[str]) -> Optional[str]:
+        return v.strip().lower() if v else None
+
+
+class FacebookLoginRequest(BaseModel):
+    token: Optional[str] = None
+    code: Optional[str] = None
+    redirect_uri: Optional[str] = None
+    email: Optional[EmailStr] = None
+    name: Optional[str] = None
+    avatar_url: Optional[str] = None
+    facebook_id: Optional[str] = None
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, v: Optional[str]) -> Optional[str]:
+        return v.strip().lower() if v else None
