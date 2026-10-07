@@ -13,6 +13,12 @@ class JobSeekerProfileBase(BaseModel):
     country: str = "Vietnam"
     github_url: Optional[str] = None
     linkedin_url: Optional[str] = None
+    # BR-101-07 / BR-101-08
+    is_visible: bool = True
+    visibility: str = "public"
+    is_archived: bool = False
+    archived_at: Optional[datetime] = None
+    archive_reason: Optional[str] = None
 
 class JobSeekerProfileCreate(JobSeekerProfileBase):
     pass
@@ -31,10 +37,15 @@ class JobSeekerProfileUpdate(BaseModel):
     country: Optional[str] = None
     github_url: Optional[str] = None
     linkedin_url: Optional[str] = None
+    is_visible: Optional[bool] = None
+    visibility: Optional[str] = None
 
 class JobSeekerProfileOut(JobSeekerProfileBase):
     id: int
     user_id: int
+    completeness: Optional[int] = None
+    can_apply: Optional[bool] = None
+    has_verified_contact: Optional[bool] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

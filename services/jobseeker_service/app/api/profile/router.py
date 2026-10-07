@@ -43,6 +43,21 @@ def update_jobseeker_profile(
     )
 
 
+@router.get("/completeness", response_model=APIResponse[dict], summary="Get Profile Completeness")
+def get_profile_completeness(
+    user: User = Depends(get_current_jobseeker),
+    db: Session = Depends(get_db),
+):
+    from . import service
+    profile = service.get_or_create_jobseeker_profile(db, user)
+    completeness = service.compute_profile_completeness(user, profile)
+    return success_response(data={
+        "completeness": completeness,
+        "can_apply": completeness >= 60,
+        "min_required": 60,
+    })
+
+
 @router.get("/saved-jobs", response_model=APIResponse[list], summary="Get Saved Jobs")
 def get_saved_jobs(
     user: User = Depends(get_current_jobseeker),

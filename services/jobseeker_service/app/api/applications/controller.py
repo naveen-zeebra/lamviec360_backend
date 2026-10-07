@@ -26,6 +26,15 @@ def apply_for_job_controller(
     """Validate vacancy, apply, increment count, and audit event."""
     profile = service.get_or_create_profile(db, user)
 
+    # BR-101-02: Profile Completeness (at least 60% required to apply)
+    from services.jobseeker_service.app.api.profile.service import compute_profile_completeness
+    completeness = compute_profile_completeness(user, profile)
+    if completeness < 60:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Profile completeness must be at least 60% to apply for a job . Your profile is currently at {completeness}%. Please update your profile first.",
+        )
+
     job = service.get_active_job(db, data.job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job posting is no longer active or does not exist")

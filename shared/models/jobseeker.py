@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, Numeric
+from sqlalchemy import Column, Integer, String, Text, ForeignKey, Numeric, Boolean, DateTime
 from sqlalchemy.orm import relationship
 from shared.database.base import Base, TimestampMixin
 
@@ -18,6 +18,15 @@ class JobSeekerProfile(Base, TimestampMixin):
     country = Column(String(100), default="Vietnam")
     github_url = Column(String(255), nullable=True)
     linkedin_url = Column(String(255), nullable=True)
+
+    # BR-101-07: Profile Visibility
+    is_visible = Column(Boolean, default=True, nullable=False)
+    visibility = Column(String(50), default="public", nullable=False)  # "public", "private"
+
+    # BR-101-08: Inactive Profile Archiving
+    is_archived = Column(Boolean, default=False, nullable=False)
+    archived_at = Column(DateTime, nullable=True)
+    archive_reason = Column(String(255), nullable=True)
 
     # Relationships
     user = relationship("User", back_populates="jobseeker_profile")

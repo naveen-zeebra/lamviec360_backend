@@ -52,7 +52,8 @@ def create_jobseeker_user(
         full_name=full_name,
         phone=phone,
         user_type="jobseeker",
-        is_active=True,
+        # BR-101-01: Must be verified before the account is activated
+        is_active=False,
         is_verified=False,
         roles=roles,
     )
@@ -65,7 +66,7 @@ def create_jobseeker_user(
     db.refresh(user)
     db.refresh(profile)
 
-    logger.info(f"Registered jobseeker {email} (user_id={user.id})")
+    logger.info(f"Registered jobseeker {email} (user_id={user.id}, pending verification)")
     return user, profile
 
 
@@ -79,6 +80,12 @@ def authenticate_jobseeker(db: Session, email: str, password: str) -> Optional[U
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied. Account is not a job seeker account.",
+        )
+    # BR-101-01: Account must be verified before activation
+    if not user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account is not activated. Please verify your email address to activate your account.",
         )
     return user
 
@@ -113,13 +120,17 @@ def clear_verification_code(email: str) -> None:
 
 @service_error_handler
 def mark_jobseeker_verified(db: Session, email: str) -> Optional[User]:
-    """Mark jobseeker user as email verified."""
+    """
+    BR-101-01: Contact verification.
+    Marks jobseeker verified and activates the account.
+    """
     user = db.query(User).filter(User.email == email.lower()).first()
     if user:
         user.is_verified = True
+        user.is_active = True  # Activated after contact method is verified
         db.commit()
         db.refresh(user)
-        logger.info(f"Jobseeker {email} marked as email-verified")
+        logger.info(f"Jobseeker {email} verified and activated")
     return user
 
 

@@ -42,12 +42,30 @@ logger = get_logger("jobseeker_auth_controller")
 
 def register_jobseeker_controller(data: JobSeekerRegisterRequest, request: Request, db: Session) -> Dict[str, Any]:
     """Register candidate, issue tokens, send verification OTP."""
-    existing = service.get_user_by_email(db, data.email)
-    if existing:
+    # BR-101-01 & BR-101-06: Email and Phone must be unique for active accounts
+    existing_email = service.get_user_by_email(db, data.email)
+    if existing_email and not existing_email.is_deleted:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="An account with this email already exists",
+            detail="An active account with this email address already exists.",
         )
+
+    if data.phone and str(data.phone).strip():
+        clean_phone = str(data.phone).strip()
+        existing_phone = (
+            db.query(User)
+            .filter(
+                User.phone == clean_phone,
+                User.is_deleted == False,
+                User.is_active == True,
+            )
+            .first()
+        )
+        if existing_phone:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="An active account with this phone number already exists",
+            )
 
     user, _ = service.create_jobseeker_user(
         db=db,
@@ -113,6 +131,16 @@ def login_jobseeker_controller(data: JobSeekerLoginRequest, request: Request, db
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Your account has been deactivated. Please contact support.",
         )
+
+    # BR-101-08: Update last_login timestamp and unarchive active candidate if previously archived
+    from datetime import datetime, timezone
+    user.last_login = datetime.now(timezone.utc)
+    if user.jobseeker_profile and getattr(user.jobseeker_profile, "is_archived", False):
+        user.jobseeker_profile.is_archived = False
+        user.jobseeker_profile.archived_at = None
+        user.jobseeker_profile.archive_reason = None
+        user.jobseeker_profile.is_visible = True
+    db.commit()
 
     access_token = create_jobseeker_token(
         seeker_id=user.id,
@@ -278,7 +306,19 @@ def verify_email_controller(
             request=request,
         )
 
-    return {"email": target_email, "is_verified": True}
+    access_token = create_jobseeker_token(seeker_id=user.id, email=user.email) if user else None
+    return {
+        "email": target_email,
+        "is_verified": True,
+        "access_token": access_token,
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "full_name": user.full_name,
+            "is_active": user.is_active,
+            "is_verified": user.is_verified,
+        } if user else None,
+    }
 
 
 def forgot_password_controller(data: ForgotPasswordRequest, request: Request, db: Session) -> Dict[str, Any]:
