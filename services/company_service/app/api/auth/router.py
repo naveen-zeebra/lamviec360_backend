@@ -154,3 +154,70 @@ def change_password(
 ):
     res = change_password_controller(req, user, db)
     return success_response(message=res.get("message", "Password updated successfully"))
+
+
+@router.get("/validate-tax-id/{tax_id}", response_model=APIResponse[dict], summary="Validate Vietnam Business Tax ID via VietQR")
+def validate_tax_id(tax_id: str, db: Session = Depends(get_db)):
+    """
+    Validates a Vietnamese Tax ID / Business code using the official VietQR National Registry API.
+    API: https://api.vietqr.io/v2/business/{tax_id}
+    """
+    import re
+    from shared.models import CompanyProfile
+    from shared.utils.logger import get_logger
+
+    logger = get_logger("company_auth")
+    clean_id = re.sub(r"[^0-9\-]", "", tax_id.strip())
+    if not clean_id or len(clean_id) < 8:
+        return success_response(
+            data={"valid": False, "tax_id": clean_id, "error": "Tax ID must be at least 8 digits"},
+            message="Invalid Tax ID format",
+        )
+
+    url = f"https://api.vietqr.io/v2/business/{clean_id}"
+    try:
+        import httpx
+        with httpx.Client(timeout=6.0) as client:
+            resp = client.get(url)
+            if resp.status_code == 200:
+                body = resp.json()
+                if body.get("code") == "00" and body.get("data"):
+                    b_data = body["data"]
+                    existing = (
+                        db.query(CompanyProfile)
+                        .filter(CompanyProfile.tax_code == clean_id)
+                        .first()
+                    )
+                    return success_response(
+                        data={
+                            "valid": True,
+                            "tax_id": clean_id,
+                            "business": b_data,
+                            "already_registered": existing is not None,
+                        },
+                        message="Valid Business Tax ID",
+                    )
+                else:
+                    return success_response(
+                        data={
+                            "valid": False,
+                            "tax_id": clean_id,
+                            "error": body.get("desc") or "Tax ID not found in Vietnam Business Registry",
+                            "business": None,
+                        },
+                        message="Tax ID not found",
+                    )
+    except Exception as e:
+        logger.warning(f"VietQR lookup failed for {clean_id}: {e}")
+        is_format_ok = bool(re.match(r"^\d{10}(\-\d{3}|\d{3})?$", clean_id))
+        return success_response(
+            data={
+                "valid": is_format_ok,
+                "tax_id": clean_id,
+                "business": None,
+                "fallback": True,
+                "error": None if is_format_ok else "Tax ID format invalid (expected 10 or 13 digits)",
+            },
+            message="Tax ID validated with fallback",
+        )
+
