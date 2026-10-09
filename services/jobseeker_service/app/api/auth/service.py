@@ -468,8 +468,10 @@ def verify_oauth_credentials(
                     params={"access_token": access_token},
                     timeout=10.0,
                 )
+                print("u_re333333333s", u_res)
                 if u_res.status_code == 200:
                     raw_data = u_res.json()
+                    print("raw_data555", raw_data)
                     provider_user_id = str(raw_data.get("id") or provider_user_id)
                     email = raw_data.get("email") or email
                     name = raw_data.get("name") or name

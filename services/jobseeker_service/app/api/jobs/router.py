@@ -31,7 +31,7 @@ def search_jobs(
     experience_level: Optional[str] = Query(None, description="Junior, Mid-level, Senior, Lead"),
     min_salary: Optional[float] = Query(None),
     page: int = Query(1, ge=1),
-    page_size: int = Query(10, ge=1, le=100),
+    page_size: int = Query(10, ge=1, le=500),
     db: Session = Depends(get_db),
 ):
     items, total_items = search_jobs_controller(
