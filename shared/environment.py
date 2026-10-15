@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from urllib.parse import urlparse, unquote
 from dotenv import load_dotenv
 
 # Path to root .env
@@ -27,24 +28,34 @@ class EnvironmentConfig:
     COMPANY_SERVICE_PORT: int = COMPANY_PORT
     ADMIN_SERVICE_PORT: int = ADMIN_PORT
 
-    # Database Engine & Credentials
-    DB_ENGINE: str = os.getenv("DB_ENGINE", "sqlite").lower()
-    
-    # PostgreSQL Configuration
-    POSTGRES_USER: str = os.getenv("POSTGRES_USER", "postgres")
-    POSTGRES_PASSWORD: str = os.getenv("POSTGRES_PASSWORD", "postgres")
-    POSTGRES_HOST: str = os.getenv("POSTGRES_HOST", "localhost")
-    POSTGRES_PORT: int = int(os.getenv("POSTGRES_PORT", "5432"))
-    POSTGRES_DB: str = os.getenv("POSTGRES_DB", "jobportal_db")
+    # Database Configuration (PostgreSQL DATABASE_URL only)
+    DATABASE_URL: str = os.getenv(
+        "DATABASE_URL",
+        "postgresql://postgres:postgres@localhost:5432/jobportal_db",
+    ).strip()
 
-    # Resolved DATABASE_URL
-    _env_db_url: str = os.getenv("DATABASE_URL", "").strip()
-    if _env_db_url:
-        DATABASE_URL: str = _env_db_url
-    elif DB_ENGINE in ["postgres", "postgresql"]:
-        DATABASE_URL: str = f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}"
-    else:
-        DATABASE_URL: str = "sqlite:///./jobportal.db"
+    if DATABASE_URL.lower().startswith("sqlite:"):
+        raise ValueError("SQLite is unsupported. Please configure a PostgreSQL database URL (postgresql://...).")
+    if DATABASE_URL.startswith("postgres://"):
+        DATABASE_URL = "postgresql://" + DATABASE_URL[len("postgres://"):]
+
+    # Derived attributes parsed from DATABASE_URL for backwards compatibility
+    try:
+        _parsed = urlparse(DATABASE_URL)
+        DB_ENGINE: str = "postgres"
+        POSTGRES_USER: str = unquote(_parsed.username or "postgres")
+        POSTGRES_PASSWORD: str = unquote(_parsed.password or "postgres")
+        POSTGRES_HOST: str = _parsed.hostname or "localhost"
+        POSTGRES_PORT: int = _parsed.port or 5432
+        POSTGRES_DB: str = _parsed.path.lstrip("/") or "jobportal_db"
+    except Exception:
+        DB_ENGINE = "postgres"
+        POSTGRES_USER = "postgres"
+        POSTGRES_PASSWORD = "postgres"
+        POSTGRES_HOST = "localhost"
+        POSTGRES_PORT = 5432
+        POSTGRES_DB = "jobportal_db"
+
 
     # JWT
     JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "super-secret-jwt-key-for-job-portal-platform-360")

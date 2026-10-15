@@ -43,7 +43,7 @@ class AdminUser(Base, TimestampMixin, SoftDeleteMixin):
     first_name = Column(String(100), nullable=True)
     last_name = Column(String(100), nullable=True)
     phone = Column(String(50), nullable=True)
-    avatar_url = Column(String(500), nullable=True)
+    avatar_url = Column(Text, nullable=True)
     
     role_id = Column(Integer, ForeignKey("admin_roles.id", ondelete="RESTRICT"), nullable=True)
     role_name = Column(String(50), default="Operations Admin", nullable=False)  # Cached title: "Super Admin", etc.

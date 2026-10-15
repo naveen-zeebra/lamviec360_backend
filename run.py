@@ -56,8 +56,7 @@ def main():
     print("[1/2] Initializing Shared Database & Default Seeds...")
     try:
         from create_postgres_db import create_database_if_not_exists
-        if "postgres" in env.DATABASE_URL:
-            create_database_if_not_exists()
+        create_database_if_not_exists()
             
         init_db()
         seed_database()

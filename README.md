@@ -10,7 +10,7 @@ A high-performance, modular Python backend platform featuring **three dedicated 
                       ┌─────────────────────────────────┐
                       │          Shared Layer           │
                       │  SQLAlchemy 2.0 / Pydantic /    │
-                      │  JWT / Bcrypt / SQLite/Postgres │
+                      │  JWT / Bcrypt / PostgreSQL      │
                       └──────────────┬──────────────────┘
                                      │
            ┌─────────────────────────┼─────────────────────────┐
@@ -58,24 +58,15 @@ The database automatically seeds the following accounts on first startup:
 pip install -r requirements.txt
 ```
 
-### 2. Database Setup (SQLite vs PostgreSQL)
+### 2. Database Setup (PostgreSQL)
 
-By default, the project uses **SQLite** (`sqlite:///./jobportal.db`) for instant zero-configuration local execution.
-
-To switch to **PostgreSQL**:
-1. Edit [.env](file:///d:/Project/BolierPlate%20Setup/Reactjs/new-api-setup/.env):
+The platform runs on **PostgreSQL**.
+1. Configure database connection string in [.env](file:///d:/Project/JobPortal/git_src/git_lamviec_360/lamviec360_backend/.env):
    ```ini
-   DB_ENGINE=postgres
-   POSTGRES_USER=postgres
-   POSTGRES_PASSWORD=your_password
-   POSTGRES_HOST=localhost
-   POSTGRES_PORT=5432
-   POSTGRES_DB=jobportal_db
-   
-   # Or set direct connection string:
+   # Database Configuration (PostgreSQL DATABASE_URL only)
    DATABASE_URL=postgresql://postgres:your_password@localhost:5432/jobportal_db
    ```
-2. (Optional) Auto-create the database if it doesn't exist yet:
+2. (Optional) Auto-create the target database if it doesn't exist yet:
    ```bash
    python create_postgres_db.py
    ```

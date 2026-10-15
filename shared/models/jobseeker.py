@@ -32,6 +32,21 @@ class JobSeekerProfile(Base, TimestampMixin):
     user = relationship("User", back_populates="jobseeker_profile")
     applications = relationship("JobApplication", back_populates="jobseeker", cascade="all, delete-orphan")
     saved_jobs = relationship("SavedJob", back_populates="jobseeker", cascade="all, delete-orphan")
+    resumes = relationship("JobSeekerResume", back_populates="jobseeker", cascade="all, delete-orphan")
+
+
+class JobSeekerResume(Base, TimestampMixin):
+    __tablename__ = "jobseeker_resumes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    jobseeker_id = Column(Integer, ForeignKey("jobseeker_profiles.id", ondelete="CASCADE"), nullable=False, index=True)
+    file_name = Column(String(255), nullable=False)
+    file_url = Column(String(500), nullable=False)
+    mime_type = Column(String(120), nullable=True)
+    size_bytes = Column(Integer, default=0, nullable=False)
+    is_default = Column(Boolean, default=False, nullable=False)
+
+    jobseeker = relationship("JobSeekerProfile", back_populates="resumes")
 
 
 class SavedJob(Base, TimestampMixin):

@@ -10,8 +10,8 @@ class CompanyProfile(Base, TimestampMixin):
     
     company_name = Column(String(255), nullable=False, index=True)
     legal_name = Column(String(255), nullable=True)
-    logo_url = Column(String(500), nullable=True)
-    cover_image_url = Column(String(500), nullable=True)
+    logo_url = Column(Text, nullable=True)
+    cover_image_url = Column(Text, nullable=True)
     website = Column(String(255), nullable=True)
     industry = Column(String(100), nullable=True, index=True)
     company_size = Column(String(50), nullable=True)  # e.g. "50-200 employees"

@@ -3,17 +3,114 @@
 # Purpose : Domain & persistence logic for Job Seeker Profile & Saved Jobs
 # ─────────────────────────────────────────────────────────────────────────────
 
+import base64
+import uuid
+from pathlib import Path
+from urllib.parse import unquote
+from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, List, Optional, Tuple
+from fastapi import HTTPException, status, UploadFile
 from sqlalchemy.orm import Session
 
-from datetime import datetime, timezone, timedelta
-from fastapi import HTTPException, status
-
+from shared.environment import env
 from shared.models import User, JobSeekerProfile, SavedJob, JobPosting
 from shared.utils.error_handler import service_error_handler
 from shared.utils.logger import get_logger
 
 logger = get_logger("jobseeker_profile_service")
+
+
+def persist_avatar_data(user: User, avatar_data: Optional[str]) -> Optional[str]:
+    """
+    Decodes and writes data-URL avatars to disk as clean image files in uploads/avatars/,
+    returning the static URL path '/uploads/avatars/...'.
+    Normal URLs or paths are preserved as-is.
+    """
+    if not avatar_data:
+        return avatar_data
+
+    raw = str(avatar_data).strip()
+    if raw.startswith("data:image/"):
+        header, sep, data_part = raw.partition(",")
+        if sep:
+            header_lower = header.lower()
+            ext = "png"
+            if "jpeg" in header_lower or "jpg" in header_lower:
+                ext = "jpg"
+            elif "webp" in header_lower:
+                ext = "webp"
+            elif "gif" in header_lower:
+                ext = "gif"
+            elif "svg" in header_lower:
+                ext = "svg"
+
+            upload_root = Path(str(env.UPLOAD_DIR or "./uploads")).resolve()
+            avatar_dir = upload_root / "avatars"
+            avatar_dir.mkdir(parents=True, exist_ok=True)
+
+            filename = f"avatar_{user.id}_{uuid.uuid4().hex[:8]}.{ext}"
+            target_path = avatar_dir / filename
+
+            if ";base64" in header_lower:
+                try:
+                    payload_bytes = base64.b64decode(data_part)
+                    if len(payload_bytes) > 2 * 1024 * 1024:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Profile photo must not exceed 2MB.",
+                        )
+                    target_path.write_bytes(payload_bytes)
+                    return f"/uploads/avatars/{filename}"
+                except HTTPException:
+                    raise
+                except Exception as e:
+                    logger.warning(f"Failed to decode base64 avatar: {e}")
+            elif "svg" in header_lower:
+                try:
+                    svg_content = unquote(data_part)
+                    target_path.write_text(svg_content, encoding="utf-8")
+                    return f"/uploads/avatars/{filename}"
+                except Exception as e:
+                    logger.warning(f"Failed to save svg avatar: {e}")
+
+    return raw
+
+
+def save_avatar_file(db: Session, user: User, file: UploadFile) -> str:
+    """Save an uploaded image file for user avatar and persist path."""
+    content_type = (file.content_type or "").lower()
+    allowed_exts = [".jpg", ".jpeg", ".png"]
+    allowed_types = ["image/jpeg", "image/png"]
+
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in allowed_exts or (content_type and content_type not in allowed_types):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unsupported file format. Allowed formats: JPG, JPEG, and PNG only.",
+        )
+
+    file_ext = ext.lstrip(".") if ext else ("jpg" if "jpeg" in content_type else "png")
+
+    upload_root = Path(str(env.UPLOAD_DIR or "./uploads")).resolve()
+    avatar_dir = upload_root / "avatars"
+    avatar_dir.mkdir(parents=True, exist_ok=True)
+
+    content = file.file.read()
+    if len(content) > 2 * 1024 * 1024:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Profile photo must not exceed 2MB.",
+        )
+
+    filename = f"avatar_{user.id}_{uuid.uuid4().hex[:8]}.{file_ext}"
+    target_path = avatar_dir / filename
+    target_path.write_bytes(content)
+
+    user.avatar_url = f"/uploads/avatars/{filename}"
+    db.commit()
+    db.refresh(user)
+    logger.info(f"Updated avatar for user_id={user.id} -> {user.avatar_url}")
+    return user.avatar_url
 
 
 def compute_profile_completeness(user: User, profile: JobSeekerProfile) -> int:
@@ -32,7 +129,10 @@ def compute_profile_completeness(user: User, profile: JobSeekerProfile) -> int:
         bool(profile.headline and len(profile.headline.strip()) > 0),
         bool(profile.city and len(profile.city.strip()) > 0),
         bool(profile.skills and len(str(profile.skills).strip()) > 0),
-        bool(profile.resume_url and len(profile.resume_url.strip()) > 0),
+        bool(
+            (profile.resume_url and len(profile.resume_url.strip()) > 0)
+            or bool(getattr(profile, "resumes", None))
+        ),
         bool(profile.bio and len(profile.bio.strip()) > 0),
         bool(
             (profile.experience_years is not None and float(profile.experience_years) > 0)
@@ -102,8 +202,21 @@ def get_or_create_jobseeker_profile(db: Session, user: User) -> JobSeekerProfile
 
 def serialize_profile(user: User, profile: JobSeekerProfile) -> Dict[str, Any]:
     """Serialize user and profile data with business rule fields."""
+    from sqlalchemy.orm import object_session
+    from .resume_service import ensure_legacy_resume, serialize_resume
+
+    try:
+        db = object_session(profile)
+        if db:
+            ensure_legacy_resume(db, profile)
+            db.refresh(profile)
+    except Exception:
+        pass
+
     completeness = compute_profile_completeness(user, profile)
     has_verified_contact = bool((user.email and user.is_verified) or (user.phone and user.is_verified))
+    resume_rows = list(getattr(profile, "resumes", None) or [])
+    resume_rows.sort(key=lambda r: (not bool(r.is_default), r.id or 0))
 
     return {
         "id": profile.id,
@@ -115,6 +228,7 @@ def serialize_profile(user: User, profile: JobSeekerProfile) -> Dict[str, Any]:
         "headline": profile.headline,
         "bio": profile.bio,
         "resume_url": profile.resume_url,
+        "resumes": [serialize_resume(r) for r in resume_rows],
         "skills": profile.skills,
         "experience_years": float(profile.experience_years or 0),
         "expected_salary": float(profile.expected_salary) if profile.expected_salary else None,
@@ -170,7 +284,7 @@ def update_profile_and_user(
     if data.get("full_name") is not None:
         user.full_name = data["full_name"]
     if data.get("avatar_url") is not None:
-        user.avatar_url = data["avatar_url"]
+        user.avatar_url = persist_avatar_data(user, data["avatar_url"])
 
     # BR-101-05: Expected salary validation (1M - 500M VND)
     if "expected_salary" in data and data["expected_salary"] is not None:

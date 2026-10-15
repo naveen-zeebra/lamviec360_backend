@@ -22,6 +22,7 @@ def apply_for_job_controller(
     user: User,
     request: Request,
     db: Session,
+    upload_file=None,
 ) -> Dict[str, Any]:
     """Validate vacancy, apply, increment count, and audit event."""
     profile = service.get_or_create_profile(db, user)
@@ -42,12 +43,16 @@ def apply_for_job_controller(
     if service.check_existing_application(db, data.job_id, profile.id):
         raise HTTPException(status_code=400, detail="You have already applied for this position")
 
-    app = service.create_application(
+    save_to_profile = True if data.save_to_profile is None else bool(data.save_to_profile)
+    app, resume_id = service.create_application(
         db=db,
         job=job,
         profile=profile,
         cover_letter=data.cover_letter,
         resume_url=data.resume_url,
+        resume_id=data.resume_id,
+        upload_file=upload_file,
+        save_to_profile=save_to_profile,
     )
 
     try:
@@ -82,6 +87,8 @@ def apply_for_job_controller(
         "job_title": job.title,
         "status": app.status,
         "applied_at": app.created_at.isoformat() if app.created_at else None,
+        "resume_url": app.resume_url,
+        "resume_id": resume_id,
     }
 
 
@@ -98,3 +105,53 @@ def get_application_detail_controller(application_id: int, user: User, db: Sessi
     if not detail:
         raise HTTPException(status_code=404, detail="Application not found")
     return detail
+
+
+def withdraw_application_controller(
+    application_id: int,
+    user: User,
+    request: Request,
+    db: Session,
+) -> Dict[str, Any]:
+    """Candidate withdraws an application before screening (BR-301-04)."""
+    profile = service.get_or_create_profile(db, user)
+    app = service.withdraw_application(db, application_id, profile.id)
+
+    # In-app notification
+    job_title = app.job.title if app.job else "job vacancy"
+    try:
+        from shared.models.notification import Notification
+        notif = Notification(
+            user_id=user.id,
+            title="Application Withdrawn",
+            message=f"You have withdrawn your application for '{job_title}'.",
+            type="application",
+            application_id=app.id,
+            read=False,
+        )
+        db.add(notif)
+        db.commit()
+    except Exception as notif_err:
+        logger.warning(f"Could not create notification for withdrawn application: {notif_err}")
+
+    # Audit log
+    log_audit_event(
+        db,
+        action="WITHDRAW",
+        module="JOB_APPLICATIONS",
+        description=f"User {user.email} withdrew application {app.id} for job '{job_title}'",
+        user_id=user.id,
+        user_email=user.email,
+        user_type=user.user_type,
+        request=request,
+    )
+
+    return {
+        "application_id": app.id,
+        "job_id": app.job_id,
+        "job_title": job_title,
+        "status": app.status,
+        "withdrawn_at": app.updated_at.isoformat() if app.updated_at else None,
+        "message": "Application withdrawn successfully",
+    }
+

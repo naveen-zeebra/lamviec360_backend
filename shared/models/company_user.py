@@ -14,7 +14,7 @@ class CompanyUser(Base, TimestampMixin, SoftDeleteMixin):
     first_name = Column(String(100), nullable=True)
     last_name = Column(String(100), nullable=True)
     phone = Column(String(50), nullable=True)
-    avatar_url = Column(String(500), nullable=True)
+    avatar_url = Column(Text, nullable=True)
     
     # Predefined company roles: "company_admin", "recruiter", "hiring_manager", "interviewer"
     role = Column(String(50), default="recruiter", nullable=False, index=True)

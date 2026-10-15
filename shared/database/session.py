@@ -4,19 +4,13 @@ from sqlalchemy.orm import sessionmaker, Session
 from shared.environment import env
 from shared.database.base import Base
 
-is_sqlite = "sqlite" in env.DATABASE_URL
-connect_args = {"check_same_thread": False} if is_sqlite else {}
 engine_kwargs = {
-    "connect_args": connect_args,
     "pool_pre_ping": True,
+    "pool_size": 10,
+    "max_overflow": 20,
+    "pool_recycle": 1800,
     "echo": False,
 }
-if not is_sqlite:
-    engine_kwargs.update({
-        "pool_size": 10,
-        "max_overflow": 20,
-        "pool_recycle": 1800,
-    })
 
 engine = create_engine(env.DATABASE_URL, **engine_kwargs)
 
