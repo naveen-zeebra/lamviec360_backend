@@ -33,6 +33,7 @@ class JobSeekerProfile(Base, TimestampMixin):
     applications = relationship("JobApplication", back_populates="jobseeker", cascade="all, delete-orphan")
     saved_jobs = relationship("SavedJob", back_populates="jobseeker", cascade="all, delete-orphan")
     resumes = relationship("JobSeekerResume", back_populates="jobseeker", cascade="all, delete-orphan")
+    documents = relationship("JobSeekerDocument", back_populates="jobseeker", cascade="all, delete-orphan")
 
 
 class JobSeekerResume(Base, TimestampMixin):
@@ -40,6 +41,7 @@ class JobSeekerResume(Base, TimestampMixin):
 
     id = Column(Integer, primary_key=True, index=True)
     jobseeker_id = Column(Integer, ForeignKey("jobseeker_profiles.id", ondelete="CASCADE"), nullable=False, index=True)
+    resume_name = Column(String(255), nullable=True)  # Named resume title e.g. "Software Engineer CV"
     file_name = Column(String(255), nullable=False)
     file_url = Column(String(500), nullable=False)
     mime_type = Column(String(120), nullable=True)
@@ -47,6 +49,26 @@ class JobSeekerResume(Base, TimestampMixin):
     is_default = Column(Boolean, default=False, nullable=False)
 
     jobseeker = relationship("JobSeekerProfile", back_populates="resumes")
+
+
+class JobSeekerDocument(Base, TimestampMixin):
+    """
+    JSP-FR-012: Candidate Document Archive.
+    Encrypted storage for employment contracts, relieving letters, payslips, and certificates.
+    Storage limit: 10MB per file, 100MB quota per candidate.
+    """
+    __tablename__ = "jobseeker_documents"
+
+    id = Column(Integer, primary_key=True, index=True)
+    jobseeker_id = Column(Integer, ForeignKey("jobseeker_profiles.id", ondelete="CASCADE"), nullable=False, index=True)
+    category = Column(String(50), nullable=False, default="other")  # contract, relieving_letter, payslip, certificate, other
+    title = Column(String(255), nullable=False)
+    file_name = Column(String(255), nullable=False)
+    file_url = Column(String(500), nullable=False)
+    mime_type = Column(String(120), nullable=True)
+    size_bytes = Column(Integer, default=0, nullable=False)
+
+    jobseeker = relationship("JobSeekerProfile", back_populates="documents")
 
 
 class SavedJob(Base, TimestampMixin):
@@ -58,3 +80,4 @@ class SavedJob(Base, TimestampMixin):
 
     jobseeker = relationship("JobSeekerProfile", back_populates="saved_jobs")
     job = relationship("JobPosting")
+

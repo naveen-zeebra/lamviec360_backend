@@ -19,17 +19,29 @@ from shared.utils.resume_storage import (
 logger = get_logger("jobseeker_resume_service")
 
 
-def serialize_resume(row: JobSeekerResume) -> Dict[str, Any]:
+def serialize_resume(row: JobSeekerResume, db: Optional[Session] = None) -> Dict[str, Any]:
+    used_count = 0
+    if db is not None:
+        from shared.models import JobApplication
+        used_count = db.query(JobApplication).filter(
+            JobApplication.jobseeker_id == row.jobseeker_id,
+            JobApplication.resume_url == row.file_url,
+            JobApplication.status != "withdrawn",
+        ).count()
+
     return {
         "id": row.id,
+        "resume_name": getattr(row, "resume_name", None) or row.file_name,
         "file_name": row.file_name,
         "file_url": row.file_url,
         "mime_type": row.mime_type,
         "size_bytes": int(row.size_bytes or 0),
         "is_default": bool(row.is_default),
+        "used_count": used_count,
         "created_at": row.created_at.isoformat() if row.created_at else None,
         "updated_at": row.updated_at.isoformat() if row.updated_at else None,
     }
+
 
 
 def _list_rows(db: Session, profile_id: int) -> List[JobSeekerResume]:
@@ -66,12 +78,23 @@ def ensure_legacy_resume(db: Session, profile: JobSeekerProfile) -> None:
 
 def list_resumes_payload(db: Session, profile: JobSeekerProfile) -> Dict[str, Any]:
     ensure_legacy_resume(db, profile)
-    items = [serialize_resume(r) for r in _list_rows(db, profile.id)]
+    items = [serialize_resume(r, db=db) for r in _list_rows(db, profile.id)]
     return {
         "items": items,
         "count": len(items),
         "max": MAX_RESUMES_PER_SEEKER,
     }
+
+
+def rename_resume(db: Session, profile: JobSeekerProfile, resume_id: int, new_name: str) -> JobSeekerResume:
+    row = get_owned_resume(db, profile, resume_id)
+    clean_name = str(new_name).strip()
+    if clean_name:
+        row.resume_name = clean_name
+        db.commit()
+        db.refresh(row)
+    return row
+
 
 
 def get_default_resume(db: Session, profile: JobSeekerProfile) -> Optional[JobSeekerResume]:

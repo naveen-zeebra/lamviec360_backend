@@ -2,7 +2,7 @@ from shared.database.base import Base, TimestampMixin, SoftDeleteMixin
 from shared.models.role import Role, RolePermission, user_roles
 from shared.models.user import User
 from shared.models.oauth_account import OAuthAccount
-from shared.models.jobseeker import JobSeekerProfile, JobSeekerResume, SavedJob
+from shared.models.jobseeker import JobSeekerProfile, JobSeekerResume, SavedJob, JobSeekerDocument
 from shared.models.company import CompanyProfile
 from shared.models.company_user import CompanyUser, CompanyInvitation
 from shared.models.job import JobPosting, JobReport
@@ -28,6 +28,7 @@ __all__ = [
     "OAuthAccount",
     "JobSeekerProfile",
     "JobSeekerResume",
+    "JobSeekerDocument",
     "SavedJob",
     "CompanyProfile",
     "CompanyUser",

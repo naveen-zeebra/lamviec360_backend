@@ -53,6 +53,8 @@ def apply_for_job_controller(
         resume_id=data.resume_id,
         upload_file=upload_file,
         save_to_profile=save_to_profile,
+        resume_name=data.resume_name,
+        consent=True if data.consent is None else bool(data.consent),
     )
 
     try:

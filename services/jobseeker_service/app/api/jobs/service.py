@@ -3,6 +3,7 @@
 # Purpose : Domain & query logic for Job Seeker Job Search & Discovery
 # ─────────────────────────────────────────────────────────────────────────────
 
+from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, desc
@@ -16,6 +17,14 @@ logger = get_logger("jobseeker_jobs_service")
 
 def serialize_job_summary(job: JobPosting) -> Dict[str, Any]:
     """Serialize summary of job posting."""
+    now = datetime.utcnow()
+    is_expired = bool(job.expires_at and (job.expires_at.replace(tzinfo=None) if job.expires_at.tzinfo else job.expires_at) < now)
+    is_live = bool(
+        job.status == "published"
+        and job.moderation_status == "approved"
+        and not job.is_deleted
+        and not is_expired
+    )
     return {
         "id": job.id,
         "title": job.title,
@@ -29,6 +38,11 @@ def serialize_job_summary(job: JobPosting) -> Dict[str, Any]:
         "salary_currency": job.salary_currency,
         "is_negotiable": job.is_negotiable,
         "required_skills": job.required_skills,
+        "status": job.status,
+        "expires_at": job.expires_at.isoformat() if job.expires_at else None,
+        "deadline": job.expires_at.isoformat() if job.expires_at else None,
+        "is_expired": is_expired,
+        "is_live": is_live,
         "views_count": job.views_count,
         "created_at": job.created_at.isoformat() if job.created_at else None,
         "company": {
@@ -44,6 +58,14 @@ def serialize_job_summary(job: JobPosting) -> Dict[str, Any]:
 
 def serialize_job_detail(job: JobPosting) -> Dict[str, Any]:
     """Serialize full job details."""
+    now = datetime.utcnow()
+    is_expired = bool(job.expires_at and (job.expires_at.replace(tzinfo=None) if job.expires_at.tzinfo else job.expires_at) < now)
+    is_live = bool(
+        job.status == "published"
+        and job.moderation_status == "approved"
+        and not job.is_deleted
+        and not is_expired
+    )
     return {
         "id": job.id,
         "title": job.title,
@@ -62,6 +84,10 @@ def serialize_job_detail(job: JobPosting) -> Dict[str, Any]:
         "required_skills": job.required_skills,
         "status": job.status,
         "moderation_status": job.moderation_status,
+        "expires_at": job.expires_at.isoformat() if job.expires_at else None,
+        "deadline": job.expires_at.isoformat() if job.expires_at else None,
+        "is_expired": is_expired,
+        "is_live": is_live,
         "views_count": job.views_count,
         "applications_count": job.applications_count,
         "created_at": job.created_at.isoformat() if job.created_at else None,
@@ -94,11 +120,16 @@ def search_published_jobs(
     page: int = 1,
     page_size: int = 10,
 ) -> Tuple[List[Dict[str, Any]], int]:
-    """Query published and approved jobs with keyword, location, salary filters."""
+    """Query published, approved, non-expired jobs with keyword, location, salary filters (BR-201-09)."""
+    now = datetime.utcnow()
     query = db.query(JobPosting).filter(
         JobPosting.status == "published",
         JobPosting.moderation_status == "approved",
         JobPosting.is_deleted == False,
+        or_(
+            JobPosting.expires_at.is_(None),
+            JobPosting.expires_at > now,
+        ),
     )
 
     if keyword:

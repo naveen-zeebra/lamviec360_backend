@@ -294,19 +294,24 @@ def verify_email_controller(
 
     service.clear_verification_code(target_email)
     user = service.mark_jobseeker_verified(db, target_email)
-    if user:
-        log_audit_event(
-            db,
-            action="VERIFY_EMAIL",
-            module="JOBSEEKER_AUTH",
-            description=f"Jobseeker verified email: {user.email}",
-            user_id=user.id,
-            user_email=user.email,
-            user_type=user.user_type,
-            request=request,
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No job seeker account found with this email address. Please register first.",
         )
 
-    access_token = create_jobseeker_token(seeker_id=user.id, email=user.email) if user else None
+    log_audit_event(
+        db,
+        action="VERIFY_EMAIL",
+        module="JOBSEEKER_AUTH",
+        description=f"Jobseeker verified email: {user.email}",
+        user_id=user.id,
+        user_email=user.email,
+        user_type=user.user_type,
+        request=request,
+    )
+
+    access_token = create_jobseeker_token(seeker_id=user.id, email=user.email)
     return {
         "email": target_email,
         "is_verified": True,
@@ -315,9 +320,10 @@ def verify_email_controller(
             "id": user.id,
             "email": user.email,
             "full_name": user.full_name,
+            "phone": user.phone,
             "is_active": user.is_active,
             "is_verified": user.is_verified,
-        } if user else None,
+        },
     }
 
 

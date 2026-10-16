@@ -6,16 +6,14 @@ from typing import Optional, Tuple
 from fastapi import HTTPException, status
 
 from shared.environment import ROOT_DIR, env
+from shared.config.upload_config import UPLOAD_CONFIG
 
-MAX_RESUMES_PER_SEEKER = 5
-MAX_RESUME_BYTES = 5 * 1024 * 1024
-ALLOWED_RESUME_EXT = {".pdf", ".doc", ".docx"}
-MIME_BY_EXT = {
-    ".pdf": "application/pdf",
-    ".doc": "application/msword",
-    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-}
-MAX_RESUME_ERROR = "You can save a maximum of 5 résumés. Remove one before uploading another."
+# Backward-compatible re-exported aliases
+MAX_RESUMES_PER_SEEKER = UPLOAD_CONFIG.resume.max_count
+MAX_RESUME_BYTES = UPLOAD_CONFIG.resume.max_size_bytes
+ALLOWED_RESUME_EXT = UPLOAD_CONFIG.resume.allowed_extensions
+MIME_BY_EXT = UPLOAD_CONFIG.resume.mime_by_ext
+MAX_RESUME_ERROR = UPLOAD_CONFIG.resume.max_count_error_message
 
 
 def get_uploads_root() -> Path:
@@ -34,7 +32,7 @@ def validate_resume_filename(filename: str) -> str:
     if ext not in ALLOWED_RESUME_EXT:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Unsupported file format. Allowed formats: PDF, DOC, and DOCX only",
+            detail=UPLOAD_CONFIG.resume.format_error_message,
         )
     return ext
 
@@ -48,7 +46,7 @@ def validate_resume_size(size: int) -> None:
     if size > MAX_RESUME_BYTES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Resume file size must not exceed 5 MB",
+            detail=UPLOAD_CONFIG.resume.max_size_error_message,
         )
 
 

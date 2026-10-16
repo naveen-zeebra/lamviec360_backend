@@ -7,4 +7,6 @@ class JobApplicationCreateRequest(BaseModel):
     cover_letter: Optional[str] = None
     resume_url: Optional[str] = None
     resume_id: Optional[int] = None
+    resume_name: Optional[str] = None
     save_to_profile: Optional[bool] = True
+    consent: Optional[bool] = True

@@ -124,13 +124,15 @@ def mark_jobseeker_verified(db: Session, email: str) -> Optional[User]:
     BR-101-01: Contact verification.
     Marks jobseeker verified and activates the account.
     """
-    user = db.query(User).filter(User.email == email.lower()).first()
+    from sqlalchemy import func
+    clean_email = (email or "").strip().lower()
+    user = db.query(User).filter(func.lower(User.email) == clean_email).first()
     if user:
         user.is_verified = True
         user.is_active = True  # Activated after contact method is verified
         db.commit()
         db.refresh(user)
-        logger.info(f"Jobseeker {email} verified and activated")
+        logger.info(f"Jobseeker {clean_email} verified and activated")
     return user
 
 

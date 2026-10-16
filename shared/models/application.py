@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, ForeignKey, Boolean, DateTime
 from sqlalchemy.orm import relationship
 from shared.database.base import Base, TimestampMixin
 
@@ -11,6 +11,11 @@ class JobApplication(Base, TimestampMixin):
     
     cover_letter = Column(Text, nullable=True)
     resume_url = Column(String(500), nullable=True)
+    resume_name = Column(String(255), nullable=True)
+    
+    # BR-011: Mandatory candidate data consent
+    consent = Column(Boolean, default=True, nullable=False)
+    consent_timestamp = Column(DateTime, nullable=True)
     
     # Status ATS Pipeline: applied -> reviewing -> shortlisted -> interview -> hired / rejected
     status = Column(String(50), default="applied", nullable=False, index=True)
@@ -20,3 +25,4 @@ class JobApplication(Base, TimestampMixin):
     # Relationships
     job = relationship("JobPosting", back_populates="applications")
     jobseeker = relationship("JobSeekerProfile", back_populates="applications")
+

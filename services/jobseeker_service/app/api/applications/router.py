@@ -48,7 +48,9 @@ async def apply_for_job(
             cover_letter=form.get("cover_letter") or None,
             resume_url=form.get("resume_url") or None,
             resume_id=int(resume_id_raw) if resume_id_raw not in (None, "") else None,
+            resume_name=form.get("resume_name") or None,
             save_to_profile=_truthy(form.get("save_to_profile")),
+            consent=_truthy(form.get("consent")),
         )
         file_field = form.get("file")
         if file_field is not None and getattr(file_field, "filename", None):

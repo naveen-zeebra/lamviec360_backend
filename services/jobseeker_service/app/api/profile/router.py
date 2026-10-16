@@ -3,7 +3,8 @@
 # Purpose : Presentation layer (FastAPI endpoints) for Job Seeker Profile
 # ─────────────────────────────────────────────────────────────────────────────
 
-from fastapi import APIRouter, Depends, File, UploadFile
+from typing import Optional
+from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -21,6 +22,7 @@ from .controller import (
     unsave_job_controller,
 )
 from . import resume_service
+from . import document_service
 from . import service as profile_service
 
 router = APIRouter(prefix="/profile", tags=["Job Seeker Profile"])
@@ -43,6 +45,15 @@ def update_jobseeker_profile(
     return success_response(
         data=update_profile_controller(data, user, db),
         message="Profile updated successfully",
+    )
+
+
+@router.get("/upload-config", response_model=APIResponse[dict], summary="Get upload file size and type configurations")
+def get_upload_config():
+    from shared.config.upload_config import UPLOAD_CONFIG
+    return success_response(
+        data=UPLOAD_CONFIG.to_frontend_dict(),
+        message="Upload configuration retrieved successfully",
     )
 
 
@@ -90,8 +101,24 @@ def set_default_resume(
     profile = profile_service.get_or_create_jobseeker_profile(db, user)
     row = resume_service.set_default_resume(db, profile, resume_id)
     payload = resume_service.list_resumes_payload(db, profile)
-    payload["item"] = resume_service.serialize_resume(row)
+    payload["item"] = resume_service.serialize_resume(row, db=db)
     return success_response(data=payload, message="Default résumé updated")
+
+
+@router.patch("/resumes/{resume_id}", response_model=APIResponse[dict], summary="Rename a saved résumé")
+def rename_resume_endpoint(
+    resume_id: int,
+    data: dict,
+    user: User = Depends(get_current_jobseeker),
+    db: Session = Depends(get_db),
+):
+    profile = profile_service.get_or_create_jobseeker_profile(db, user)
+    new_name = data.get("resume_name") or data.get("name") or ""
+    row = resume_service.rename_resume(db, profile, resume_id, new_name)
+    payload = resume_service.list_resumes_payload(db, profile)
+    payload["item"] = resume_service.serialize_resume(row, db=db)
+    return success_response(data=payload, message="Résumé renamed successfully")
+
 
 
 @router.delete("/resumes/{resume_id}", response_model=APIResponse[dict], summary="Delete a saved résumé")
@@ -123,12 +150,9 @@ def get_profile_completeness(
 ):
     from . import service
     profile = service.get_or_create_jobseeker_profile(db, user)
-    completeness = service.compute_profile_completeness(user, profile)
-    return success_response(data={
-        "completeness": completeness,
-        "can_apply": completeness >= 60,
-        "min_required": 60,
-    })
+    details = service.get_profile_completeness_details(user, profile)
+    return success_response(data=details)
+
 
 
 @router.get("/saved-jobs", response_model=APIResponse[list], summary="Get Saved Jobs")
@@ -157,3 +181,59 @@ def unsave_job(
 ):
     unsave_job_controller(job_id, user, db)
     return success_response(message="Job removed from saved list")
+
+
+# ─── JSP-FR-012: Candidate Document Archive ─────────────────────────────────
+
+@router.get("/documents", response_model=APIResponse[dict], summary="List archived documents & quota")
+def list_candidate_documents(
+    category: str = "all",
+    user: User = Depends(get_current_jobseeker),
+    db: Session = Depends(get_db),
+):
+    profile = profile_service.get_or_create_jobseeker_profile(db, user)
+    return success_response(data=document_service.list_documents(db, profile, category=category))
+
+
+@router.post("/documents", response_model=APIResponse[dict], summary="Upload document to archive (max 10MB)")
+async def upload_candidate_document(
+    request: Request,
+    file: UploadFile = File(...),
+    category: Optional[str] = Form(None),
+    title: Optional[str] = Form(None),
+    user: User = Depends(get_current_jobseeker),
+    db: Session = Depends(get_db),
+):
+    resolved_category = (category or request.query_params.get("category") or "other").strip().lower()
+    resolved_title = title if title is not None else (request.query_params.get("title") or "")
+    profile = profile_service.get_or_create_jobseeker_profile(db, user)
+    row = document_service.add_document(db, profile, file, category=resolved_category, title=resolved_title)
+    usage = document_service.get_archive_usage(db, profile.id)
+    return success_response(
+        data={"item": document_service.serialize_document(row), "usage": usage},
+        message="Document uploaded to archive successfully.",
+    )
+
+
+@router.delete("/documents/{doc_id}", response_model=APIResponse[dict], summary="Delete archived document")
+def delete_candidate_document(
+    doc_id: int,
+    user: User = Depends(get_current_jobseeker),
+    db: Session = Depends(get_db),
+):
+    profile = profile_service.get_or_create_jobseeker_profile(db, user)
+    document_service.delete_document(db, profile, doc_id)
+    usage = document_service.get_archive_usage(db, profile.id)
+    return success_response(data={"usage": usage}, message="Document deleted successfully.")
+
+
+@router.get("/documents/{doc_id}/download", summary="Download archived document")
+def download_candidate_document(
+    doc_id: int,
+    user: User = Depends(get_current_jobseeker),
+    db: Session = Depends(get_db),
+):
+    profile = profile_service.get_or_create_jobseeker_profile(db, user)
+    path, row = document_service.get_document_download(db, profile, doc_id)
+    return FileResponse(path=str(path), filename=row.file_name, media_type=row.mime_type or "application/octet-stream")
+

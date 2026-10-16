@@ -16,6 +16,7 @@ from shared.environment import env
 from shared.models import User, JobSeekerProfile, SavedJob, JobPosting
 from shared.utils.error_handler import service_error_handler
 from shared.utils.logger import get_logger
+from shared.config.upload_config import UPLOAD_CONFIG
 
 logger = get_logger("jobseeker_profile_service")
 
@@ -54,10 +55,10 @@ def persist_avatar_data(user: User, avatar_data: Optional[str]) -> Optional[str]
             if ";base64" in header_lower:
                 try:
                     payload_bytes = base64.b64decode(data_part)
-                    if len(payload_bytes) > 2 * 1024 * 1024:
+                    if len(payload_bytes) > UPLOAD_CONFIG.avatar.max_size_bytes:
                         raise HTTPException(
                             status_code=status.HTTP_400_BAD_REQUEST,
-                            detail="Profile photo must not exceed 2MB.",
+                            detail=UPLOAD_CONFIG.avatar.max_size_error_message,
                         )
                     target_path.write_bytes(payload_bytes)
                     return f"/uploads/avatars/{filename}"
@@ -79,14 +80,14 @@ def persist_avatar_data(user: User, avatar_data: Optional[str]) -> Optional[str]
 def save_avatar_file(db: Session, user: User, file: UploadFile) -> str:
     """Save an uploaded image file for user avatar and persist path."""
     content_type = (file.content_type or "").lower()
-    allowed_exts = [".jpg", ".jpeg", ".png"]
-    allowed_types = ["image/jpeg", "image/png"]
+    allowed_exts = UPLOAD_CONFIG.avatar.allowed_extensions
+    allowed_types = UPLOAD_CONFIG.avatar.allowed_mime_types
 
     ext = Path(file.filename or "").suffix.lower()
     if ext not in allowed_exts or (content_type and content_type not in allowed_types):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Unsupported file format. Allowed formats: JPG, JPEG, and PNG only.",
+            detail=UPLOAD_CONFIG.avatar.format_error_message,
         )
 
     file_ext = ext.lstrip(".") if ext else ("jpg" if "jpeg" in content_type else "png")
@@ -96,10 +97,10 @@ def save_avatar_file(db: Session, user: User, file: UploadFile) -> str:
     avatar_dir.mkdir(parents=True, exist_ok=True)
 
     content = file.file.read()
-    if len(content) > 2 * 1024 * 1024:
+    if len(content) > UPLOAD_CONFIG.avatar.max_size_bytes:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Profile photo must not exceed 2MB.",
+            detail=UPLOAD_CONFIG.avatar.max_size_error_message,
         )
 
     filename = f"avatar_{user.id}_{uuid.uuid4().hex[:8]}.{file_ext}"
@@ -113,36 +114,60 @@ def save_avatar_file(db: Session, user: User, file: UploadFile) -> str:
     return user.avatar_url
 
 
-def compute_profile_completeness(user: User, profile: JobSeekerProfile) -> int:
+def get_profile_completeness_details(user: User, profile: JobSeekerProfile) -> Dict[str, Any]:
     """
-    BR-101-02: Profile Completeness.
-    Computes profile completeness percentage (0-100%) across 10 core candidate dimensions.
-    Requires at least 60% completeness to submit job applications.
+    JSP-FR-005a / BR-101-02: Profile Completeness.
+    Calculation: (filled required fields / total required fields) * 100%
+    Required fields: Name, Email, Phone, Location, Work Experience (>=1), Education (>=1), Skills (>=3), Resume (>=1)
     """
     if not user or not profile:
-        return 0
+        return {"completeness": 0, "missing_fields": ["All fields"], "can_apply": False}
 
-    checks = [
-        bool(user.full_name and len(user.full_name.strip()) >= 2),
-        bool(user.phone and len(user.phone.strip()) >= 5),
-        bool(user.email and len(user.email.strip()) > 0),
-        bool(profile.headline and len(profile.headline.strip()) > 0),
-        bool(profile.city and len(profile.city.strip()) > 0),
-        bool(profile.skills and len(str(profile.skills).strip()) > 0),
-        bool(
-            (profile.resume_url and len(profile.resume_url.strip()) > 0)
-            or bool(getattr(profile, "resumes", None))
-        ),
-        bool(profile.bio and len(profile.bio.strip()) > 0),
-        bool(
-            (profile.experience_years is not None and float(profile.experience_years) > 0)
-            or (profile.expected_salary is not None and float(profile.expected_salary) > 0)
-        ),
-        bool(user.avatar_url or profile.linkedin_url or profile.github_url),
+    # Helper to parse skills count
+    skills_raw = str(profile.skills or "").strip()
+    skills_count = 0
+    if skills_raw:
+        if skills_raw.startswith("["):
+            import json
+            try:
+                skills_list = json.loads(skills_raw)
+                skills_count = len(skills_list) if isinstance(skills_list, list) else 1
+            except Exception:
+                skills_count = len([s for s in skills_raw.split(",") if s.strip()])
+        else:
+            skills_count = len([s for s in skills_raw.split(",") if s.strip()])
+
+    has_resume = bool(
+        (profile.resume_url and len(profile.resume_url.strip()) > 0)
+        or bool(getattr(profile, "resumes", None) and len(profile.resumes) > 0)
+    )
+
+    requirements = [
+        ("Full Name", bool(user.full_name and len(user.full_name.strip()) >= 2)),
+        ("Email Address", bool(user.email and len(user.email.strip()) > 0)),
+        ("Phone Number", bool(user.phone and len(user.phone.strip()) >= 5)),
+        ("Location / City", bool((profile.city and len(profile.city.strip()) > 0) or (profile.country and len(profile.country.strip()) > 0))),
+        ("Work Experience (>=1)", bool(profile.experience_years is not None and float(profile.experience_years) > 0)),
+        ("Education (>=1)", bool((profile.headline and len(profile.headline.strip()) > 0) or (profile.bio and len(profile.bio.strip()) > 0))),
+        ("Skills (>=3)", skills_count >= 3),
+        ("Resume (>=1)", has_resume),
     ]
 
-    completed_count = sum(1 for c in checks if c)
-    return int((completed_count / len(checks)) * 100)
+    completed = sum(1 for name, ok in requirements if ok)
+    missing = [name for name, ok in requirements if not ok]
+    percentage = int(round((completed / len(requirements)) * 100))
+
+    return {
+        "completeness": percentage,
+        "missing_fields": missing,
+        "can_apply": percentage >= 60,
+        "min_required": 60,
+    }
+
+
+def compute_profile_completeness(user: User, profile: JobSeekerProfile) -> int:
+    """Computes profile completeness percentage (0-100%) per JSP-FR-005a."""
+    return get_profile_completeness_details(user, profile)["completeness"]
 
 
 def auto_archive_inactive_profiles(db: Session) -> int:
@@ -362,11 +387,20 @@ def save_job_for_profile(db: Session, profile_id: int, job_id: int) -> bool:
     if existing:
         return True
 
+    # BR-015 / BR-201-05: Maximum 100 saved jobs per candidate
+    current_count = db.query(SavedJob).filter(SavedJob.jobseeker_id == profile_id).count()
+    if current_count >= 100:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You can save up to 100 jobs simultaneously (BR-201-05). Please remove a saved job before adding another.",
+        )
+
     new_saved = SavedJob(jobseeker_id=profile_id, job_id=job_id)
     db.add(new_saved)
     db.commit()
     logger.info(f"Saved job id={job_id} for profile_id={profile_id}")
     return True
+
 
 
 @service_error_handler

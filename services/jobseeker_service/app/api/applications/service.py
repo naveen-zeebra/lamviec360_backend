@@ -35,23 +35,67 @@ def get_or_create_profile(db: Session, user: User) -> JobSeekerProfile:
 
 @service_error_handler
 def get_active_job(db: Session, job_id: int) -> Optional[JobPosting]:
-    """Retrieve active or published job for application."""
-    return db.query(JobPosting).filter(
+    """Retrieve active, published, and non-expired job for application (BR-201-09)."""
+    from datetime import datetime
+    now = datetime.utcnow()
+    job = db.query(JobPosting).filter(
         JobPosting.id == job_id,
         JobPosting.status.in_(["active", "published"]),
         JobPosting.is_deleted == False,
     ).first()
+    if not job:
+        return None
+    if job.moderation_status and job.moderation_status != "approved":
+        return None
+    if job.expires_at:
+        exp = job.expires_at.replace(tzinfo=None) if job.expires_at.tzinfo else job.expires_at
+        if exp < now:
+            return None
+    return job
 
 
 @service_error_handler
 def check_existing_application(db: Session, job_id: int, profile_id: int) -> bool:
-    """Check if candidate already submitted an active application for this vacancy."""
-    existing = db.query(JobApplication).filter(
-        JobApplication.job_id == job_id,
-        JobApplication.jobseeker_id == profile_id,
-        JobApplication.status != "withdrawn",
-    ).first()
-    return existing is not None
+    """
+    Check if candidate already submitted an active application for this vacancy.
+    JSP-FR-005b / BR-301-09:
+    Candidates who have been rejected cannot reapply to the same job for 90 days.
+    """
+    existing = (
+        db.query(JobApplication)
+        .filter(
+            JobApplication.job_id == job_id,
+            JobApplication.jobseeker_id == profile_id,
+            JobApplication.status != "withdrawn",
+        )
+        .order_by(JobApplication.updated_at.desc())
+        .first()
+    )
+
+    if not existing:
+        return False
+
+    status_lower = (existing.status or "").lower()
+    if status_lower == "rejected":
+        from datetime import datetime, timezone, timedelta
+        now = datetime.now(timezone.utc)
+        ref_time = existing.updated_at or existing.created_at
+        if ref_time:
+            if ref_time.tzinfo is None:
+                ref_time = ref_time.replace(tzinfo=timezone.utc)
+            days_passed = (now - ref_time).days
+            if days_passed < 90:
+                rejection_date = ref_time.strftime("%d/%m/%Y")
+                reapply_date = (ref_time + timedelta(days=90)).strftime("%d/%m/%Y")
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"You applied for this position on {rejection_date} and were not selected. You can reapply after {reapply_date} (BR-301-09)."
+                )
+            else:
+                # 90 days have elapsed, reapplication allowed per JSP-FR-005b
+                return False
+
+    return True
 
 
 @service_error_handler
@@ -90,13 +134,6 @@ def resolve_application_resume(
     if default:
         return default.file_url, default.id
 
-    # Backwards-compatibility fallbacks for JSON-only clients that pass resume_url
-    # directly (the original apply endpoint before the library was introduced).
-    # These extra steps are intentionally beyond the spec's 4-step resolution table
-    # so that existing callers which never used the library still work without error.
-    # Note: get_default_resume above already calls ensure_legacy_resume which seeds
-    # a library row from profile.resume_url when the library is empty, so these
-    # branches are only reachable in edge cases where seeding failed or was bypassed.
     if resume_url and str(resume_url).strip():
         return str(resume_url).strip(), None
 
@@ -115,8 +152,20 @@ def create_application(
     resume_id: Optional[int] = None,
     upload_file=None,
     save_to_profile: bool = True,
+    resume_name: Optional[str] = None,
+    consent: bool = True,
 ) -> tuple[JobApplication, Optional[int]]:
-    """Create job application record and increment counter."""
+    """Create job application record with consent metadata and completeness gate."""
+    # BR-101-02: Profile completeness must be >= 60%
+    if profile.user:
+        from services.jobseeker_service.app.api.profile.service import compute_profile_completeness
+        completeness = compute_profile_completeness(profile.user, profile)
+        if completeness < 60:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Please complete your profile to at least 60% before applying (BR-101-02). Current completeness: {completeness}%."
+            )
+
     resolved_resume, resolved_id = resolve_application_resume(
         db,
         profile,
@@ -125,6 +174,20 @@ def create_application(
         upload_file=upload_file,
         save_to_profile=save_to_profile,
     )
+
+    # Determine named title
+    final_resume_name = resume_name
+    if not final_resume_name and resolved_id:
+        from shared.models import JobSeekerResume
+        res_row = db.query(JobSeekerResume).filter(JobSeekerResume.id == resolved_id).first()
+        if res_row:
+            final_resume_name = res_row.resume_name or res_row.file_name
+    if not final_resume_name and resolved_resume:
+        import os
+        final_resume_name = os.path.basename(resolved_resume)
+
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
 
     existing_withdrawn = db.query(JobApplication).filter(
         JobApplication.job_id == job.id,
@@ -135,11 +198,14 @@ def create_application(
     if existing_withdrawn:
         existing_withdrawn.cover_letter = cover_letter
         existing_withdrawn.resume_url = resolved_resume
+        existing_withdrawn.resume_name = final_resume_name
+        existing_withdrawn.consent = bool(consent)
+        existing_withdrawn.consent_timestamp = now
         existing_withdrawn.status = "applied"
         job.applications_count = (job.applications_count or 0) + 1
         db.commit()
         db.refresh(existing_withdrawn)
-        logger.info(f"Re-activated withdrawn application id={existing_withdrawn.id} for job_id={job.id} by profile_id={profile.id}")
+        logger.info(f"Re-activated application id={existing_withdrawn.id} for job_id={job.id} by profile_id={profile.id}")
         return existing_withdrawn, resolved_id
 
     application = JobApplication(
@@ -147,6 +213,9 @@ def create_application(
         jobseeker_id=profile.id,
         cover_letter=cover_letter,
         resume_url=resolved_resume,
+        resume_name=final_resume_name,
+        consent=bool(consent),
+        consent_timestamp=now,
         status="applied",
     )
     db.add(application)
@@ -155,6 +224,7 @@ def create_application(
     db.refresh(application)
     logger.info(f"Created application id={application.id} for job_id={job.id} by profile_id={profile.id}")
     return application, resolved_id
+
 
 
 @service_error_handler
@@ -216,7 +286,10 @@ def get_application_by_id(db: Session, application_id: int, profile_id: int) -> 
         "status": app.status,
         "cover_letter": app.cover_letter,
         "resume_url": app.resume_url,
+        "resume_name": app.resume_name or (match.resume_name if match else None),
         "resume_id": resume_id,
+        "consent": getattr(app, "consent", True),
+        "consent_timestamp": app.consent_timestamp.isoformat() if getattr(app, "consent_timestamp", None) else None,
         "recruiter_notes": app.recruiter_notes,
         "applied_at": app.created_at.isoformat() if app.created_at else None,
         "updated_at": app.updated_at.isoformat() if app.updated_at else None,
@@ -228,6 +301,7 @@ def get_application_by_id(db: Session, application_id: int, profile_id: int) -> 
             "company_name": app.job.company.company_name if app.job.company else "Unknown",
         } if app.job else None,
     }
+
 
 
 @service_error_handler
