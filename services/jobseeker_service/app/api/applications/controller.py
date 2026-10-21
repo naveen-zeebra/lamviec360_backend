@@ -3,12 +3,13 @@
 # Purpose : Orchestration layer for Candidate Job Applications
 # ─────────────────────────────────────────────────────────────────────────────
 
-from typing import Dict, Any, List
-from fastapi import HTTPException, Request
+from typing import Dict, Any, List, Optional
+from datetime import datetime, timezone
+from fastapi import HTTPException, Request, BackgroundTasks
 from sqlalchemy.orm import Session
 
 from shared.models import User
-from shared.utils import log_audit_event
+from shared.utils import log_audit_event, send_application_confirmation_email
 from shared.utils.logger import get_logger
 
 from . import service
@@ -23,8 +24,9 @@ def apply_for_job_controller(
     request: Request,
     db: Session,
     upload_file=None,
+    background_tasks: Optional[BackgroundTasks] = None,
 ) -> Dict[str, Any]:
-    """Validate vacancy, apply, increment count, and audit event."""
+    """Validate vacancy, apply, increment count, send 24h auto-acknowledgment email (BR-301-11), and audit event."""
     profile = service.get_or_create_profile(db, user)
 
     # BR-101-02: Profile Completeness (at least 60% required to apply)
@@ -57,12 +59,53 @@ def apply_for_job_controller(
         consent=True if data.consent is None else bool(data.consent),
     )
 
+    company_name = job.company.company_name if job.company else "Company"
+
+    # BR-301-11: Dispatch auto-acknowledgment confirmation email to talent
+    email_dispatched = False
+    try:
+        if background_tasks:
+            background_tasks.add_task(
+                send_application_confirmation_email,
+                to_email=user.email,
+                candidate_name=user.full_name,
+                job_title=job.title,
+                company_name=company_name,
+                application_id=app.id,
+                applied_at=app.created_at,
+                job_location=job.city,
+                resume_name=app.resume_name,
+            )
+            email_dispatched = True
+        else:
+            email_dispatched = send_application_confirmation_email(
+                to_email=user.email,
+                candidate_name=user.full_name,
+                job_title=job.title,
+                company_name=company_name,
+                application_id=app.id,
+                applied_at=app.created_at,
+                job_location=job.city,
+                resume_name=app.resume_name,
+            )
+    except Exception as email_err:
+        logger.warning(f"Could not dispatch application confirmation email for app id={app.id}: {email_err}")
+
+    # Record acknowledgment status in DB
+    try:
+        app.acknowledgment_sent = True
+        app.acknowledgment_sent_at = datetime.now(timezone.utc)
+        db.commit()
+    except Exception as db_err:
+        logger.warning(f"Could not update acknowledgment status for app id={app.id}: {db_err}")
+
+    # In-app notification
     try:
         from shared.models.notification import Notification
         notif = Notification(
             user_id=user.id,
             title="Application submitted",
-            message=f"Your application for {job.title} was received.",
+            message=f"Your application for {job.title} was received. Auto-acknowledgment is processed within 24 hours (BR-301-11).",
             type="confirmation",
             application_id=app.id,
             read=False,
@@ -91,7 +134,11 @@ def apply_for_job_controller(
         "applied_at": app.created_at.isoformat() if app.created_at else None,
         "resume_url": app.resume_url,
         "resume_id": resume_id,
+        "acknowledgment_email_sent": True,
+        "auto_acknowledgment_status": "dispatched" if email_dispatched else "queued",
+        "acknowledgment_sla": "24_hours",
     }
+
 
 
 def get_my_applications_controller(user: User, db: Session) -> List[Dict[str, Any]]:

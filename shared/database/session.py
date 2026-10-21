@@ -1,5 +1,5 @@
 from typing import Generator
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
 from shared.environment import env
 from shared.database.base import Base
@@ -28,3 +28,12 @@ def init_db() -> None:
     # Import all models to ensure they are registered with Base.metadata
     from shared.models import user, role, oauth_account, jobseeker, company, company_user, job, application, audit_log, admin_user, notification  # noqa: F401
     Base.metadata.create_all(bind=engine)
+
+    # Safe idempotent migration for BR-301-11 acknowledgment columns
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE job_applications ADD COLUMN IF NOT EXISTS acknowledgment_sent BOOLEAN DEFAULT FALSE;"))
+            conn.execute(text("ALTER TABLE job_applications ADD COLUMN IF NOT EXISTS acknowledgment_sent_at TIMESTAMP;"))
+    except Exception:
+        pass
+

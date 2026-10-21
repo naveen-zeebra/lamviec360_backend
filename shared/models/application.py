@@ -22,6 +22,10 @@ class JobApplication(Base, TimestampMixin):
     recruiter_notes = Column(Text, nullable=True)
     rating = Column(Integer, nullable=True)  # 1-5 candidate score
 
+    # BR-301-11: Talent auto-acknowledgment within 24 hours of submission
+    acknowledgment_sent = Column(Boolean, default=False, nullable=True)
+    acknowledgment_sent_at = Column(DateTime, nullable=True)
+
     # Relationships
     job = relationship("JobPosting", back_populates="applications")
     jobseeker = relationship("JobSeekerProfile", back_populates="applications")

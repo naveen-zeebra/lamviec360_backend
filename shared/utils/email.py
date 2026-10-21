@@ -211,3 +211,97 @@ This link is valid for 1 hour. If you did not request this, please ignore this e
 """
 
     return send_email(to_email=to_email, subject=subject, html_content=html_content, text_content=text_content)
+
+
+def send_application_confirmation_email(
+    to_email: str,
+    candidate_name: Optional[str] = None,
+    job_title: str = "Position",
+    company_name: str = "Company",
+    application_id: Optional[int] = None,
+    applied_at: Optional[object] = None,
+    job_location: Optional[str] = None,
+    resume_name: Optional[str] = None,
+    tracker_url: Optional[str] = None,
+) -> bool:
+    """
+    Dispatches a simplified application confirmation and 24-hour review notice email.
+    """
+    display_name = candidate_name or "Candidate"
+    app_id_str = f"#{application_id}" if application_id else ""
+
+    subject = f"Application Received: {job_title} at {company_name}"
+    if app_id_str:
+        subject += f" ({app_id_str})"
+
+    if not tracker_url:
+        app_path = f"/applications/{application_id}" if application_id else "/applications"
+        tracker_url = f"{env.JOBSEEKER_WEB_URL}{app_path}"
+
+    app_id_line = f"<div style='margin-bottom: 8px;'><strong>Application ID:</strong> #{application_id}</div>" if application_id else ""
+
+    html_content = f"""<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 24px; color: #1e293b; }}
+    .container {{ max-width: 540px; margin: 0 auto; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }}
+    .header {{ background: #0f172a; padding: 28px 32px; text-align: center; }}
+    .logo {{ font-size: 22px; font-weight: 800; color: #3b82f6; letter-spacing: -0.5px; text-decoration: none; }}
+    .body {{ padding: 32px; }}
+    .greeting {{ font-size: 18px; font-weight: 700; margin-bottom: 12px; color: #0f172a; }}
+    .summary-card {{ background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px 20px; margin: 20px 0; font-size: 14px; line-height: 1.6; color: #334155; }}
+    .btn-container {{ margin: 28px 0; text-align: center; }}
+    .btn {{ display: inline-block; background-color: #2563eb; color: #ffffff !important; font-size: 15px; font-weight: 600; text-decoration: none; padding: 13px 28px; border-radius: 8px; box-shadow: 0 2px 4px rgba(37,99,235,0.2); }}
+    .footer {{ padding: 20px 32px; background: #f8fafc; border-top: 1px solid #e2e8f0; font-size: 12px; color: #94a3b8; text-align: center; }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo">LamViec360</div>
+    </div>
+    <div class="body">
+      <div class="greeting">Hi {display_name},</div>
+      <p style="color: #475569; font-size: 15px; line-height: 1.6;">
+        Your application for <strong>{job_title}</strong> at <strong>{company_name}</strong> has been received successfully.
+      </p>
+
+      <div class="summary-card">
+        {app_id_line}
+        <div style="color: #166534; font-weight: 500;">
+          &#x23F1;&#xFE0F; Your profile is under review. You can expect an update within 24 hours.
+        </div>
+      </div>
+
+      <div class="btn-container">
+        <a href="{tracker_url}" class="btn" target="_blank">View Application</a>
+      </div>
+
+      <p style="color: #64748b; font-size: 13px; line-height: 1.5; margin-top: 24px;">
+        You can track the progress of your application anytime in your LamViec360 portal.
+      </p>
+    </div>
+    <div class="footer">
+      &copy; LamViec360 Career Portal. All rights reserved.
+    </div>
+  </div>
+</body>
+</html>"""
+
+    text_content = f"""Hi {display_name},
+
+Your application for {job_title} at {company_name} has been received successfully{f" (Application ID: #{application_id})" if application_id else ""}.
+
+Your profile is under review, and you can expect an update within 24 hours.
+
+View your application:
+{tracker_url}
+
+Best regards,
+LamViec360 Team
+"""
+
+    return send_email(to_email=to_email, subject=subject, html_content=html_content, text_content=text_content)
+

@@ -3,7 +3,7 @@
 # Purpose : Presentation layer (FastAPI endpoints) for Candidate Job Applications
 # ─────────────────────────────────────────────────────────────────────────────
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
@@ -32,6 +32,7 @@ def _truthy(value) -> bool:
 @router.post("", response_model=APIResponse[dict], summary="Apply for Job")
 async def apply_for_job(
     request: Request,
+    background_tasks: BackgroundTasks,
     user: User = Depends(get_current_jobseeker),
     db: Session = Depends(get_db),
 ):
@@ -64,11 +65,19 @@ async def apply_for_job(
         except Exception:
             raise HTTPException(status_code=400, detail="Invalid application payload")
 
-    result = apply_for_job_controller(data, user, request, db, upload_file=upload_file)
+    result = apply_for_job_controller(
+        data,
+        user,
+        request,
+        db,
+        upload_file=upload_file,
+        background_tasks=background_tasks,
+    )
     return success_response(
         data=result,
         message="Application submitted successfully!",
     )
+
 
 
 @router.get("", response_model=APIResponse[list], summary="Get My Applications")

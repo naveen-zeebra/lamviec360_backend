@@ -290,6 +290,8 @@ def get_application_by_id(db: Session, application_id: int, profile_id: int) -> 
         "resume_id": resume_id,
         "consent": getattr(app, "consent", True),
         "consent_timestamp": app.consent_timestamp.isoformat() if getattr(app, "consent_timestamp", None) else None,
+        "acknowledgment_sent": getattr(app, "acknowledgment_sent", False),
+        "acknowledgment_sent_at": app.acknowledgment_sent_at.isoformat() if getattr(app, "acknowledgment_sent_at", None) else None,
         "recruiter_notes": app.recruiter_notes,
         "applied_at": app.created_at.isoformat() if app.created_at else None,
         "updated_at": app.updated_at.isoformat() if app.updated_at else None,
@@ -334,4 +336,61 @@ def withdraw_application(db: Session, application_id: int, profile_id: int) -> J
     db.refresh(app)
     logger.info(f"Application id={app.id} withdrawn by profile_id={profile_id}")
     return app
+
+
+@service_error_handler
+def dispatch_pending_24h_acknowledgments(db: Session) -> int:
+    """
+    Find applications submitted within the past 24 hours that haven't received
+    their auto-acknowledgment email (BR-301-11), and dispatch the confirmation email.
+    Returns the count of emails dispatched.
+    """
+    from datetime import datetime, timezone, timedelta
+    from shared.utils.email import send_application_confirmation_email
+
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(hours=24)
+
+    pending_apps = (
+        db.query(JobApplication)
+        .filter(
+            JobApplication.created_at >= cutoff,
+            JobApplication.status == "applied",
+            (JobApplication.acknowledgment_sent == False) | (JobApplication.acknowledgment_sent == None),
+        )
+        .all()
+    )
+
+    dispatched = 0
+    for app in pending_apps:
+        profile = app.jobseeker
+        user = profile.user if profile else None
+        job = app.job
+        if not user or not user.email or not job:
+            continue
+
+        company_name = job.company.company_name if job.company else "Company"
+        try:
+            send_application_confirmation_email(
+                to_email=user.email,
+                candidate_name=user.full_name,
+                job_title=job.title,
+                company_name=company_name,
+                application_id=app.id,
+                applied_at=app.created_at,
+                job_location=job.city,
+                resume_name=app.resume_name,
+            )
+            app.acknowledgment_sent = True
+            app.acknowledgment_sent_at = datetime.now(timezone.utc)
+            dispatched += 1
+
+        except Exception as e:
+            logger.warning(f"Failed to dispatch pending confirmation email for app id={app.id}: {e}")
+
+    if dispatched > 0:
+        db.commit()
+
+    return dispatched
+
 

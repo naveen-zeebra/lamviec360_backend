@@ -23,6 +23,7 @@ from shared.utils.email import (
     send_email,
     send_verification_email,
     send_password_reset_email,
+    send_application_confirmation_email,
 )
 from shared.utils.error_handler import service_error_handler
 
@@ -51,6 +52,8 @@ __all__ = [
     "send_email",
     "send_verification_email",
     "send_password_reset_email",
+    "send_application_confirmation_email",
     "service_error_handler",
 ]
+
 
