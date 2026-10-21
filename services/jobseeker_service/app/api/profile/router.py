@@ -140,7 +140,13 @@ def download_resume(
 ):
     profile = profile_service.get_or_create_jobseeker_profile(db, user)
     path, row = resume_service.download_path_for_resume(db, profile, resume_id)
-    return FileResponse(path=str(path), filename=row.file_name, media_type=row.mime_type or "application/octet-stream")
+    return FileResponse(
+        path=str(path),
+        filename=row.file_name,
+        media_type=row.mime_type or "application/octet-stream",
+        content_disposition_type="attachment",
+    )
+
 
 
 @router.get("/completeness", response_model=APIResponse[dict], summary="Get Profile Completeness")
@@ -235,5 +241,11 @@ def download_candidate_document(
 ):
     profile = profile_service.get_or_create_jobseeker_profile(db, user)
     path, row = document_service.get_document_download(db, profile, doc_id)
-    return FileResponse(path=str(path), filename=row.file_name, media_type=row.mime_type or "application/octet-stream")
+    return FileResponse(
+        path=str(path),
+        filename=row.file_name,
+        media_type=row.mime_type or "application/octet-stream",
+        content_disposition_type="attachment",
+    )
+
 

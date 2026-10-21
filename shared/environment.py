@@ -88,10 +88,23 @@ class EnvironmentConfig:
         os.getenv("SMTP_FROM_NAME") or os.getenv("FROM_NAME") or "LamViec360 Career Portal"
     ).strip().strip("'\"")
 
-    # Frontend URLs
-    JOBSEEKER_WEB_URL: str = os.getenv("JOBSEEKER_WEB_URL", "http://localhost:3000").strip().strip("'\"")
-    COMPANY_WEB_URL: str = os.getenv("COMPANY_WEB_URL", "http://localhost:3001").strip().strip("'\"")
-    ADMIN_WEB_URL: str = os.getenv("ADMIN_WEB_URL", "http://localhost:3002").strip().strip("'\"")
+    # Frontend URLs (Local, Develop, Production)
+    if APP_ENV == "production":
+        _DEFAULT_JOBSEEKER_URL = "https://lamviec360.com"
+        _DEFAULT_COMPANY_URL = "https://company.lamviec360.com"
+        _DEFAULT_ADMIN_URL = "https://superadmin.lamviec360.com"
+    elif APP_ENV in ("develop", "development", "dev"):
+        _DEFAULT_JOBSEEKER_URL = "https://devjobseeker.lamviec360.com"
+        _DEFAULT_COMPANY_URL = "https://devcompany.lamviec360.com"
+        _DEFAULT_ADMIN_URL = "https://devsuperadmin.lamviec360.com"
+    else:
+        _DEFAULT_JOBSEEKER_URL = "http://localhost:3001"
+        _DEFAULT_COMPANY_URL = "http://localhost:3002"
+        _DEFAULT_ADMIN_URL = "http://localhost:3003"
+
+    JOBSEEKER_WEB_URL: str = os.getenv("JOBSEEKER_WEB_URL", _DEFAULT_JOBSEEKER_URL).strip().strip("'\"")
+    COMPANY_WEB_URL: str = os.getenv("COMPANY_WEB_URL", _DEFAULT_COMPANY_URL).strip().strip("'\"")
+    ADMIN_WEB_URL: str = os.getenv("ADMIN_WEB_URL", _DEFAULT_ADMIN_URL).strip().strip("'\"")
 
     # OAuth Identity Providers (Google, Zalo, LinkedIn, Facebook)
     GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "").strip().strip("'\"")
