@@ -4,12 +4,15 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 from typing import Optional, List, Dict, Any, Tuple
+from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, asc, or_, func
 
-from shared.models import User, CompanyProfile, JobPosting, JobApplication, JobSeekerProfile
+from shared.models import User, CompanyProfile, JobPosting, JobApplication, JobSeekerProfile, JobSeekerDocument
 from shared.utils.error_handler import service_error_handler
 from shared.utils.logger import get_logger
+from shared.utils.resume_storage import get_uploads_root
+from shared.utils.document_encryption import decrypt_document_data
 
 logger = get_logger("company_applicants_service")
 
@@ -40,6 +43,25 @@ STAGE_FILTER_EXPANSION: Dict[str, List[str]] = {
     "hired": ["hired", "Hired"],
     "rejected": ["rejected", "Rejected"],
 }
+
+# EMP-FR-026b: Confidential verification documents are unlocked from Shortlisted stage onward
+SHORTLISTED_OR_BEYOND_STAGES = {
+    "shortlisted",
+    "interviewing",
+    "interview",
+    "interview scheduled",
+    "offer",
+    "offer sent",
+    "offer_sent",
+    "hired",
+}
+
+
+def is_stage_shortlisted_or_beyond(status_val: Optional[str]) -> bool:
+    if not status_val:
+        return False
+    norm = str(status_val).lower().strip()
+    return norm in SHORTLISTED_OR_BEYOND_STAGES
 
 
 @service_error_handler
@@ -273,6 +295,7 @@ def serialize_applicant_detail(app: JobApplication) -> Dict[str, Any]:
         "phone": seeker_user.phone if seeker_user else "",
         "experienceYears": float(seeker.experience_years or 0) if seeker else 0.0,
         "educationLevel": "Bachelor's Degree",
+        "can_view_verification_documents": is_stage_shortlisted_or_beyond(app.status),
         "candidate": {
             "name": seeker_user.full_name if seeker_user else "",
             "email": seeker_user.email if seeker_user else "",
@@ -359,3 +382,101 @@ def schedule_candidate_interview(db: Session, app: JobApplication, interview_dat
     app.status = "interviewing"
     db.commit()
     logger.info(f"Scheduled interview for application id={app.id}")
+
+
+# ─── EMP-FR-026b: Confidential Verification Documents Access ────────────────
+
+@service_error_handler
+def get_applicant_verification_documents(db: Session, company_id: int, application_id: int) -> Dict[str, Any]:
+    """
+    EMP-FR-026b: Access candidate's previous employment contracts, relieving letters,
+    payslips, and certificates. Accessible ONLY from the Shortlisted stage onward.
+    """
+    app = get_applicant_by_id(db, company_id, application_id)
+    if not app:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Applicant record not found.")
+
+    can_access = is_stage_shortlisted_or_beyond(app.status)
+    if not can_access:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Candidate verification documents are confidential and accessible only from the Shortlisted stage onward (EMP-FR-026b).",
+        )
+
+    docs = (
+        db.query(JobSeekerDocument)
+        .filter(JobSeekerDocument.jobseeker_id == app.jobseeker_id)
+        .order_by(JobSeekerDocument.created_at.desc())
+        .all()
+    )
+
+    items = []
+    for d in docs:
+        cat = d.category
+        if cat == "relieving_letter":
+            cat = "relieving"
+        items.append({
+            "id": d.id,
+            "category": cat,
+            "title": d.title,
+            "file_name": d.file_name,
+            "mime_type": d.mime_type,
+            "size_bytes": d.size_bytes,
+            "is_encrypted": bool(getattr(d, "is_encrypted", True)),
+            "created_at": d.created_at.isoformat() if d.created_at else None,
+            "download_url": f"/api/v1/company/applicants/{app.id}/verification-documents/{d.id}/download",
+        })
+
+    return {
+        "application_id": app.id,
+        "candidate_name": app.jobseeker.user.full_name if (app.jobseeker and app.jobseeker.user) else "Candidate",
+        "stage": app.status,
+        "can_access": True,
+        "documents": items,
+        "total": len(items),
+    }
+
+
+@service_error_handler
+def download_applicant_verification_document(
+    db: Session,
+    company_id: int,
+    application_id: int,
+    doc_id: int,
+) -> Tuple[bytes, JobSeekerDocument]:
+    """
+    EMP-FR-026b: Decrypt and stream candidate verification document to recruiter.
+    Enforces Shortlisted-stage-onward visibility rule.
+    """
+    app = get_applicant_by_id(db, company_id, application_id)
+    if not app:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Applicant record not found.")
+
+    can_access = is_stage_shortlisted_or_beyond(app.status)
+    if not can_access:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Candidate verification documents are confidential and accessible only from the Shortlisted stage onward (EMP-FR-026b).",
+        )
+
+    doc = (
+        db.query(JobSeekerDocument)
+        .filter(
+            JobSeekerDocument.id == doc_id,
+            JobSeekerDocument.jobseeker_id == app.jobseeker_id,
+        )
+        .first()
+    )
+    if not doc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Verification document not found.")
+
+    rel = doc.file_url.lstrip("/")
+    if rel.startswith("uploads/"):
+        rel = rel[len("uploads/"):]
+    target = get_uploads_root() / rel
+    if not target.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File is not available on disk.")
+
+    raw_bytes = target.read_bytes()
+    decrypted_bytes = decrypt_document_data(raw_bytes)
+    return decrypted_bytes, doc

@@ -4,7 +4,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 from typing import Optional
-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Header, Request, UploadFile, Body, Response
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -12,6 +12,7 @@ from shared.database.session import get_db
 from shared.models import User
 from shared.schemas import APIResponse
 from shared.utils import get_current_jobseeker, success_response
+from shared.utils.document_encryption import decrypt_document_data
 
 from .schemas import JobSeekerProfileUpdateSchema
 from .controller import (
@@ -207,17 +208,89 @@ async def upload_candidate_document(
     file: UploadFile = File(...),
     category: Optional[str] = Form(None),
     title: Optional[str] = Form(None),
+    protect_with_pin: Optional[bool] = Form(False),
+    pin: Optional[str] = Form(None),
     user: User = Depends(get_current_jobseeker),
     db: Session = Depends(get_db),
 ):
     resolved_category = (category or request.query_params.get("category") or "other").strip().lower()
     resolved_title = title if title is not None else (request.query_params.get("title") or "")
+    resolved_protect = bool(protect_with_pin or request.query_params.get("protect_with_pin", "false").lower() in ("true", "1"))
+    resolved_pin = pin or request.query_params.get("pin")
+
     profile = profile_service.get_or_create_jobseeker_profile(db, user)
-    row = document_service.add_document(db, profile, file, category=resolved_category, title=resolved_title)
+    row = document_service.add_document(
+        db,
+        profile,
+        file,
+        category=resolved_category,
+        title=resolved_title,
+        protect_with_pin=resolved_protect,
+        pin=resolved_pin,
+    )
     usage = document_service.get_archive_usage(db, profile.id)
     return success_response(
         data={"item": document_service.serialize_document(row), "usage": usage},
-        message="Document uploaded to archive successfully.",
+        message="Document encrypted and uploaded to archive successfully.",
+    )
+
+
+@router.post("/documents/archive-pin", response_model=APIResponse[dict], summary="Set or update archive security PIN")
+def set_candidate_archive_pin(
+    payload: dict = Body(...),
+    user: User = Depends(get_current_jobseeker),
+    db: Session = Depends(get_db),
+):
+    profile = profile_service.get_or_create_jobseeker_profile(db, user)
+    pin = payload.get("pin", "")
+    current_pin = payload.get("current_pin")
+    document_service.set_archive_pin(db, profile, pin, current_pin=current_pin)
+    return success_response(
+        data={"has_archive_pin": True, "is_archive_locked": True},
+        message="Archive security PIN updated successfully.",
+    )
+
+
+@router.post("/documents/verify-pin", response_model=APIResponse[dict], summary="Verify archive security PIN to unlock")
+def verify_candidate_archive_pin(
+    payload: dict = Body(...),
+    user: User = Depends(get_current_jobseeker),
+    db: Session = Depends(get_db),
+):
+    profile = profile_service.get_or_create_jobseeker_profile(db, user)
+    pin = payload.get("pin", "")
+    document_service.verify_archive_pin_service(db, profile, pin)
+    return success_response(
+        data={"has_archive_pin": True, "is_archive_locked": False},
+        message="Archive unlocked successfully.",
+    )
+
+
+@router.post("/documents/lock", response_model=APIResponse[dict], summary="Lock archive")
+def lock_candidate_archive(
+    user: User = Depends(get_current_jobseeker),
+    db: Session = Depends(get_db),
+):
+    profile = profile_service.get_or_create_jobseeker_profile(db, user)
+    document_service.lock_archive(db, profile)
+    return success_response(
+        data={"has_archive_pin": bool(profile.archive_pin_hash), "is_archive_locked": True},
+        message="Archive locked.",
+    )
+
+
+@router.delete("/documents/archive-pin", response_model=APIResponse[dict], summary="Remove archive security PIN")
+def remove_candidate_archive_pin(
+    payload: dict = Body(...),
+    user: User = Depends(get_current_jobseeker),
+    db: Session = Depends(get_db),
+):
+    profile = profile_service.get_or_create_jobseeker_profile(db, user)
+    current_pin = payload.get("current_pin", "")
+    document_service.remove_archive_pin(db, profile, current_pin)
+    return success_response(
+        data={"has_archive_pin": False, "is_archive_locked": False},
+        message="Archive PIN removed successfully.",
     )
 
 
@@ -236,16 +309,30 @@ def delete_candidate_document(
 @router.get("/documents/{doc_id}/download", summary="Download archived document")
 def download_candidate_document(
     doc_id: int,
+    pin: Optional[str] = None,
+    x_archive_pin: Optional[str] = Header(None, alias="X-Archive-PIN"),
     user: User = Depends(get_current_jobseeker),
     db: Session = Depends(get_db),
 ):
     profile = profile_service.get_or_create_jobseeker_profile(db, user)
-    path, row = document_service.get_document_download(db, profile, doc_id)
-    return FileResponse(
-        path=str(path),
-        filename=row.file_name,
+    provided_pin = pin or x_archive_pin
+    path_or_content, row = document_service.get_document_download(db, profile, doc_id, pin=provided_pin)
+
+    if isinstance(path_or_content, (bytes, bytearray)):
+        content = bytes(path_or_content)
+    elif hasattr(path_or_content, "read_bytes"):
+        raw_bytes = path_or_content.read_bytes()
+        content = decrypt_document_data(raw_bytes, user_pin=provided_pin)
+    elif isinstance(path_or_content, str):
+        with open(path_or_content, "rb") as f:
+            content = decrypt_document_data(f.read(), user_pin=provided_pin)
+    else:
+        content = b""
+
+    return Response(
+        content=content,
         media_type=row.mime_type or "application/octet-stream",
-        content_disposition_type="attachment",
+        headers={"Content-Disposition": f'attachment; filename="{row.file_name}"'},
     )
 
 

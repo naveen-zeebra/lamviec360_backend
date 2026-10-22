@@ -29,6 +29,10 @@ class JobSeekerProfile(Base, TimestampMixin):
     archived_at = Column(DateTime, nullable=True)
     archive_reason = Column(String(255), nullable=True)
 
+    # JSP-FR-012: Document Archive Password/PIN Protection
+    archive_pin_hash = Column(String(255), nullable=True)
+    is_archive_locked = Column(Boolean, default=False, nullable=False)
+
     # Relationships
     user = relationship("User", back_populates="jobseeker_profile")
     applications = relationship("JobApplication", back_populates="jobseeker", cascade="all, delete-orphan")
@@ -68,6 +72,9 @@ class JobSeekerDocument(Base, TimestampMixin):
     file_url = Column(String(500), nullable=False)
     mime_type = Column(String(120), nullable=True)
     size_bytes = Column(Integer, default=0, nullable=False)
+    is_encrypted = Column(Boolean, default=True, nullable=False)
+    is_password_protected = Column(Boolean, default=False, nullable=False)
+    password_hash = Column(String(255), nullable=True)
 
     jobseeker = relationship("JobSeekerProfile", back_populates="documents")
 

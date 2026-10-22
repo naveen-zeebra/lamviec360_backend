@@ -143,3 +143,20 @@ def schedule_interview_controller(
     if not app:
         raise HTTPException(status_code=404, detail="Applicant record not found")
     service.schedule_candidate_interview(db, app, data.model_dump())
+
+
+def get_applicant_verification_documents_controller(application_id: int, user: User, db: Session) -> Dict[str, Any]:
+    """Retrieve applicant verification documents enforcing EMP-FR-026b visibility rule."""
+    profile = _require_company_profile(user)
+    return service.get_applicant_verification_documents(db, profile.id, application_id)
+
+
+def download_applicant_verification_document_controller(
+    application_id: int,
+    doc_id: int,
+    user: User,
+    db: Session,
+) -> Tuple[bytes, Any]:
+    """Decrypt and download verification document enforcing EMP-FR-026b visibility rule."""
+    profile = _require_company_profile(user)
+    return service.download_applicant_verification_document(db, profile.id, application_id, doc_id)

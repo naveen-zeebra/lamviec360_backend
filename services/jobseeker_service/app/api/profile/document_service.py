@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 import os
 import uuid
 from datetime import datetime, timezone
@@ -12,6 +12,12 @@ from shared.models import JobSeekerProfile, JobSeekerDocument
 from shared.utils.error_handler import service_error_handler
 from shared.utils.logger import get_logger
 from shared.utils.resume_storage import get_uploads_root, safe_filename
+from shared.utils.document_encryption import (
+    encrypt_document_data,
+    decrypt_document_data,
+    hash_archive_pin,
+    verify_archive_pin,
+)
 
 logger = get_logger("jobseeker_document_service")
 
@@ -37,6 +43,8 @@ def serialize_document(row: JobSeekerDocument) -> Dict[str, Any]:
         "file_url": row.file_url,
         "mime_type": row.mime_type,
         "size_bytes": int(row.size_bytes or 0),
+        "is_encrypted": bool(getattr(row, "is_encrypted", True)),
+        "is_password_protected": bool(getattr(row, "is_password_protected", False)),
         "created_at": row.created_at.isoformat() if row.created_at else None,
         "updated_at": row.updated_at.isoformat() if row.updated_at else None,
     }
@@ -51,6 +59,7 @@ def get_archive_usage(db: Session, profile_id: int) -> Dict[str, Any]:
     ) or 0
 
     doc_count = db.query(JobSeekerDocument).filter(JobSeekerDocument.jobseeker_id == profile_id).count()
+    profile = db.query(JobSeekerProfile).filter(JobSeekerProfile.id == profile_id).first()
 
     used_mb = round(total_bytes / (1024 * 1024), 2)
     quota_mb = round(MAX_STORAGE_QUOTA_BYTES / (1024 * 1024), 0)
@@ -63,6 +72,9 @@ def get_archive_usage(db: Session, profile_id: int) -> Dict[str, Any]:
         "quota_mb": quota_mb,
         "percent_used": percent_used,
         "count": doc_count,
+        "has_archive_pin": bool(profile and profile.archive_pin_hash),
+        "is_archive_locked": bool(profile and profile.is_archive_locked),
+        "encryption_standard": "AES-256",
     }
 
 
@@ -80,10 +92,13 @@ def list_documents(db: Session, profile: JobSeekerProfile, category: Optional[st
     return {
         "items": [serialize_document(r) for r in rows],
         "usage": usage,
+        "has_archive_pin": bool(profile.archive_pin_hash),
+        "is_archive_locked": bool(profile.is_archive_locked),
+        "encryption_standard": "AES-256",
     }
 
 
-def save_doc_bytes(profile_id: int, original_name: str, data: bytes) -> tuple[str, str, int, str]:
+def save_doc_bytes(profile_id: int, original_name: str, data: bytes, user_pin: Optional[str] = None) -> tuple[str, str, int, str]:
     ext = (Path(original_name).suffix or "").lstrip(".").lower()
     if ext not in ALLOWED_DOC_EXT:
         raise HTTPException(
@@ -97,6 +112,9 @@ def save_doc_bytes(profile_id: int, original_name: str, data: bytes) -> tuple[st
             detail=UPLOAD_CONFIG.document_archive.max_size_error_message,
         )
 
+    # JSP-FR-012: Encrypt data before writing to physical disk
+    encrypted_data = encrypt_document_data(data, user_pin=user_pin)
+
     safe = safe_filename(original_name)
     unique = f"{uuid.uuid4().hex[:12]}_{safe}"
     target_dir = get_uploads_root() / "documents" / str(profile_id)
@@ -104,7 +122,7 @@ def save_doc_bytes(profile_id: int, original_name: str, data: bytes) -> tuple[st
     target_path = target_dir / unique
 
     with open(target_path, "wb") as f:
-        f.write(data)
+        f.write(encrypted_data)
 
     mime = "application/pdf" if ext == "pdf" else ("image/jpeg" if ext in ("jpg", "jpeg") else ("image/png" if ext == "png" else "application/octet-stream"))
     file_url = f"/uploads/documents/{profile_id}/{unique}"
@@ -117,6 +135,8 @@ def add_document(
     upload: UploadFile,
     category: str = "other",
     title: Optional[str] = None,
+    protect_with_pin: bool = False,
+    pin: Optional[str] = None,
 ) -> JobSeekerDocument:
     if not upload or not getattr(upload, "filename", None):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Document file is required.")
@@ -139,8 +159,12 @@ def add_document(
             detail=UPLOAD_CONFIG.document_archive.quota_error_message,
         )
 
-    file_url, file_name, size_bytes, mime = save_doc_bytes(profile.id, upload.filename, data)
+    # Encrypt with PIN if user requested or profile has active PIN
+    effective_pin = pin if pin else None
+    file_url, file_name, size_bytes, mime = save_doc_bytes(profile.id, upload.filename, data, user_pin=effective_pin)
     doc_title = (title or "").strip() or Path(file_name).stem.replace("_", " ").title()
+
+    is_protected = bool(protect_with_pin or profile.archive_pin_hash)
 
     row = JobSeekerDocument(
         jobseeker_id=profile.id,
@@ -150,11 +174,13 @@ def add_document(
         file_url=file_url,
         mime_type=mime,
         size_bytes=size_bytes,
+        is_encrypted=True,
+        is_password_protected=is_protected,
     )
     db.add(row)
     db.commit()
     db.refresh(row)
-    logger.info(f"Added document id={row.id} for profile_id={profile.id} ({doc_title})")
+    logger.info(f"Added encrypted document id={row.id} for profile_id={profile.id} ({doc_title})")
     return row
 
 
@@ -170,7 +196,7 @@ def delete_document(db: Session, profile: JobSeekerProfile, doc_id: int) -> None
     db.delete(row)
     db.commit()
 
-    # Safely remove file from disk
+    # Safely remove physical encrypted file from disk
     try:
         rel = file_url.lstrip("/")
         if rel.startswith("uploads/"):
@@ -182,13 +208,31 @@ def delete_document(db: Session, profile: JobSeekerProfile, doc_id: int) -> None
         logger.warning(f"Could not remove physical document file: {e}")
 
 
-def get_document_download(db: Session, profile: JobSeekerProfile, doc_id: int):
+def get_document_download(db: Session, profile: JobSeekerProfile, doc_id: int, pin: Optional[str] = None):
+    """
+    Retrieves document target path and row, checking PIN authorization if protected.
+    Returns (target_path, row).
+    """
     row = db.query(JobSeekerDocument).filter(
         JobSeekerDocument.id == doc_id,
         JobSeekerDocument.jobseeker_id == profile.id,
     ).first()
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found.")
+
+    # Check if access requires PIN verification
+    if profile.archive_pin_hash:
+        if pin:
+            if not verify_archive_pin(pin, profile.archive_pin_hash):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid Security PIN.",
+                )
+        elif getattr(profile, "is_archive_locked", False):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Security PIN required to access this document.",
+            )
 
     rel = row.file_url.lstrip("/")
     if rel.startswith("uploads/"):
@@ -199,3 +243,68 @@ def get_document_download(db: Session, profile: JobSeekerProfile, doc_id: int):
 
     return target, row
 
+
+def get_document_decrypted_content(db: Session, profile: JobSeekerProfile, doc_id: int, pin: Optional[str] = None) -> Tuple[bytes, JobSeekerDocument]:
+    """
+    Retrieves document and decrypts its binary content on-the-fly.
+    """
+    target, row = get_document_download(db, profile, doc_id, pin=pin)
+    raw_bytes = target.read_bytes()
+    decrypted = decrypt_document_data(raw_bytes, user_pin=pin)
+    return decrypted, row
+
+
+# ---- Archive Security PIN Management (JSP-FR-012) ---------------------------
+
+def set_archive_pin(db: Session, profile: JobSeekerProfile, new_pin: str, current_pin: Optional[str] = None) -> bool:
+    """Sets or updates candidate's document archive protection PIN."""
+    clean_pin = (new_pin or "").strip()
+    if len(clean_pin) < 4:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="PIN must be at least 4 characters.")
+
+    if profile.archive_pin_hash:
+        if not current_pin or not verify_archive_pin(current_pin, profile.archive_pin_hash):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Current PIN is incorrect.")
+
+    profile.archive_pin_hash = hash_archive_pin(clean_pin)
+    profile.is_archive_locked = True
+    db.commit()
+    db.refresh(profile)
+    logger.info(f"Updated archive PIN for profile_id={profile.id}")
+    return True
+
+
+def verify_archive_pin_service(db: Session, profile: JobSeekerProfile, pin: str) -> bool:
+    """Validates PIN and temporarily unlocks the candidate's archive."""
+    if not profile.archive_pin_hash:
+        return True
+    if not pin or not verify_archive_pin(pin, profile.archive_pin_hash):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid PIN. Please try again.")
+
+    profile.is_archive_locked = False
+    db.commit()
+    db.refresh(profile)
+    return True
+
+
+def lock_archive(db: Session, profile: JobSeekerProfile) -> bool:
+    """Locks the candidate's archive."""
+    profile.is_archive_locked = True
+    db.commit()
+    db.refresh(profile)
+    return True
+
+
+def remove_archive_pin(db: Session, profile: JobSeekerProfile, current_pin: str) -> bool:
+    """Removes archive PIN protection."""
+    if not profile.archive_pin_hash:
+        return True
+    if not current_pin or not verify_archive_pin(current_pin, profile.archive_pin_hash):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Current PIN is incorrect.")
+
+    profile.archive_pin_hash = None
+    profile.is_archive_locked = False
+    db.commit()
+    db.refresh(profile)
+    logger.info(f"Removed archive PIN for profile_id={profile.id}")
+    return True

@@ -4,7 +4,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 from typing import Optional, Any
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy.orm import Session
 
 from shared.database.session import get_db
@@ -25,6 +25,8 @@ from .controller import (
     bulk_update_status_controller,
     add_note_controller,
     schedule_interview_controller,
+    get_applicant_verification_documents_controller,
+    download_applicant_verification_document_controller,
 )
 
 router = APIRouter(prefix="/applicants", tags=["ATS Applicant Management"])
@@ -127,3 +129,29 @@ def schedule_candidate_interview(
 ):
     schedule_interview_controller(application_id, data, user, db)
     return success_response(message="Interview scheduled successfully")
+
+
+# ─── EMP-FR-026b: Confidential Verification Documents Access ────────────────
+
+@router.get("/{application_id}/verification-documents", response_model=APIResponse[dict], summary="Get candidate verification documents (Shortlisted stage onward)")
+def get_applicant_verification_documents(
+    application_id: int,
+    user: Any = Depends(get_current_company_user),
+    db: Session = Depends(get_db),
+):
+    return success_response(data=get_applicant_verification_documents_controller(application_id, user, db))
+
+
+@router.get("/{application_id}/verification-documents/{doc_id}/download", summary="Download candidate verification document (Shortlisted stage onward)")
+def download_applicant_verification_document(
+    application_id: int,
+    doc_id: int,
+    user: Any = Depends(get_current_company_user),
+    db: Session = Depends(get_db),
+):
+    content, row = download_applicant_verification_document_controller(application_id, doc_id, user, db)
+    return Response(
+        content=content,
+        media_type=row.mime_type or "application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{row.file_name}"'},
+    )
