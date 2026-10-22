@@ -16,6 +16,7 @@ class JobSeekerProfileBase(BaseModel):
     # BR-101-07 / BR-101-08
     is_visible: bool = True
     visibility: str = "public"
+    job_availability: str = "open_to_work"  # "open_to_work", "open_to_opportunities", "not_looking"
     is_archived: bool = False
     archived_at: Optional[datetime] = None
     archive_reason: Optional[str] = None
@@ -39,6 +40,7 @@ class JobSeekerProfileUpdate(BaseModel):
     linkedin_url: Optional[str] = None
     is_visible: Optional[bool] = None
     visibility: Optional[str] = None
+    job_availability: Optional[str] = None
 
 class JobSeekerProfileOut(JobSeekerProfileBase):
     id: int

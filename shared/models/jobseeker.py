@@ -22,6 +22,7 @@ class JobSeekerProfile(Base, TimestampMixin):
     # BR-101-07: Profile Visibility
     is_visible = Column(Boolean, default=True, nullable=False)
     visibility = Column(String(50), default="public", nullable=False)  # "public", "private"
+    job_availability = Column(String(50), default="open_to_work", nullable=False, index=True)  # "open_to_work", "open_to_opportunities", "not_looking"
 
     # BR-101-08: Inactive Profile Archiving
     is_archived = Column(Boolean, default=False, nullable=False)

@@ -205,6 +205,10 @@ def list_company_applicants(
             "notes": [{"id": 1, "text": app.recruiter_notes, "author": "Recruiter", "at": app.created_at.strftime("%Y-%m-%d")}] if app.recruiter_notes else [],
             "applied_at": app.created_at.isoformat() if app.created_at else None,
             "applied_date": app.created_at.strftime("%Y-%m-%d") if app.created_at else None,
+            # BR-101-07 & BR-101-08: Visibility & Job Availability
+            "is_visible": getattr(seeker, "is_visible", True) if seeker else True,
+            "job_availability": getattr(seeker, "job_availability", "open_to_work") if seeker else "open_to_work",
+            "jobAvailability": getattr(seeker, "job_availability", "open_to_work") if seeker else "open_to_work",
             # Frontend compatibility fields
             "name": candidate_name,
             "email": candidate_email,

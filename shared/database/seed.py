@@ -428,6 +428,7 @@ def seed_database(db: Session = None):
                 6.0,
                 3200.0,
                 "Ho Chi Minh City",
+                "open_to_work",
             ),
             (
                 "hoa.le@candidate.vn",
@@ -440,6 +441,7 @@ def seed_database(db: Session = None):
                 4.5,
                 2200.0,
                 "Hanoi",
+                "open_to_opportunities",
             ),
             (
                 "minh.tran@design.vn",
@@ -452,11 +454,12 @@ def seed_database(db: Session = None):
                 7.0,
                 2800.0,
                 "Ho Chi Minh City",
+                "not_looking",
             ),
         ]
 
         seeker_profiles = []
-        for email, pwd, fname, phone, headline, bio, skills, exp, sal, city in seekers_seed_data:
+        for email, pwd, fname, phone, headline, bio, skills, exp, sal, city, availability in seekers_seed_data:
             s_user = db.query(User).filter_by(email=email).first()
             if not s_user:
                 s_user = User(
@@ -487,9 +490,12 @@ def seed_database(db: Session = None):
                     resume_url=f"/uploads/resumes/{fname.replace(' ', '_')}_CV.pdf",
                     github_url="https://github.com",
                     linkedin_url="https://linkedin.com",
+                    job_availability=availability,
                 )
                 db.add(s_prof)
                 db.flush()
+            else:
+                s_prof.job_availability = availability
             seeker_profiles.append(s_prof)
 
         # =====================================================================

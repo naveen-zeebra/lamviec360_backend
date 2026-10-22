@@ -198,6 +198,7 @@ def auto_archive_inactive_profiles(db: Session) -> int:
         p.archived_at = now
         p.archive_reason = "No login activity for 12 months (BR-101-08)"
         p.is_visible = False
+        p.job_availability = "not_looking"
         archived_count += 1
 
     if archived_count > 0:
@@ -267,9 +268,10 @@ def serialize_profile(user: User, profile: JobSeekerProfile) -> Dict[str, Any]:
         # BR-101-04: Verified contact method
         "is_verified": user.is_verified,
         "has_verified_contact": has_verified_contact,
-        # BR-101-07: Profile Visibility
+        # BR-101-07: Profile Visibility (takes effect immediately)
         "is_visible": getattr(profile, "is_visible", True),
         "visibility": getattr(profile, "visibility", "public"),
+        "job_availability": getattr(profile, "job_availability", "open_to_work") or "open_to_work",
         # BR-101-08: Inactive Archive
         "is_archived": getattr(profile, "is_archived", False),
         "archived_at": profile.archived_at.isoformat() if getattr(profile, "archived_at", None) else None,
@@ -285,10 +287,11 @@ def update_profile_and_user(
     data: Dict[str, Any],
 ) -> Tuple[User, JobSeekerProfile]:
     """Update User and JobSeekerProfile attributes, enforcing business rules."""
-    # BR-101-01 & BR-101-06: Check unique phone if updated
+    # Check unique phone only if updated to a different phone number
     if data.get("phone") is not None:
         new_phone = str(data["phone"]).strip()
-        if new_phone:
+        current_phone = (user.phone or "").strip()
+        if new_phone and new_phone != current_phone:
             existing_phone = (
                 db.query(User)
                 .filter(
@@ -302,26 +305,40 @@ def update_profile_and_user(
             if existing_phone:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="An active account with this phone number already exists (BR-101-01, BR-101-06).",
+                    detail="An active account with this phone number already exists.",
                 )
-        user.phone = new_phone or None
+            user.phone = new_phone
+        elif not new_phone:
+            user.phone = None
 
     if data.get("full_name") is not None:
         user.full_name = data["full_name"]
     if data.get("avatar_url") is not None:
         user.avatar_url = persist_avatar_data(user, data["avatar_url"])
 
-    # BR-101-05: Expected salary validation (1M - 500M VND)
+    # Expected salary validation (1M - 500M VND)
     if "expected_salary" in data and data["expected_salary"] is not None:
         salary_val = float(data["expected_salary"])
         if salary_val < 1_000_000 or salary_val > 500_000_000:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Salary expectation must be within the range of 1M–500M VND per month (1,000,000 to 500,000,000 VND) (BR-101-05).",
+                detail="Salary expectation must be within the range of 1M–500M VND per month (1,000,000 to 500,000,000 VND).",
             )
         profile.expected_salary = salary_val
 
-    # BR-101-07: Profile Visibility (takes effect immediately)
+    # BR-101-07 & BR-101-08: Profile Visibility & Job Availability (takes effect immediately)
+    if "job_availability" in data and data["job_availability"] is not None:
+        av_val = str(data["job_availability"]).strip().lower()
+        if av_val in ["open_to_work", "open_to_opportunities", "not_looking"]:
+            profile.job_availability = av_val
+            # If candidate sets themselves to not_looking and didn't specify visibility, default to private
+            if av_val == "not_looking" and "is_visible" not in data and "visibility" not in data:
+                profile.is_visible = False
+                profile.visibility = "private"
+            elif av_val in ["open_to_work", "open_to_opportunities"] and "is_visible" not in data and "visibility" not in data:
+                profile.is_visible = True
+                profile.visibility = "public"
+
     if "is_visible" in data and data["is_visible"] is not None:
         profile.is_visible = bool(data["is_visible"])
         profile.visibility = "public" if profile.is_visible else "private"

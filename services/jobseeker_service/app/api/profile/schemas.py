@@ -16,9 +16,21 @@ class JobSeekerProfileUpdateSchema(BaseModel):
     country: Optional[str] = None
     github_url: Optional[str] = None
     linkedin_url: Optional[str] = None
-    # BR-101-07: Profile Visibility
+    # BR-101-07: Profile Visibility & BR-101-08 Job Availability
     is_visible: Optional[bool] = None
     visibility: Optional[str] = None
+    job_availability: Optional[str] = None
+
+    @field_validator("job_availability")
+    @classmethod
+    def validate_job_availability(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None:
+            clean = v.strip().lower()
+            allowed = ["open_to_work", "open_to_opportunities", "not_looking"]
+            if clean not in allowed:
+                raise ValueError(f"job_availability must be one of {allowed}")
+            return clean
+        return v
 
     @field_validator("expected_salary")
     @classmethod

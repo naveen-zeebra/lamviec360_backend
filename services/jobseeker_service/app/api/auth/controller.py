@@ -140,6 +140,7 @@ def login_jobseeker_controller(data: JobSeekerLoginRequest, request: Request, db
         user.jobseeker_profile.archived_at = None
         user.jobseeker_profile.archive_reason = None
         user.jobseeker_profile.is_visible = True
+        user.jobseeker_profile.job_availability = "open_to_opportunities"
     db.commit()
 
     access_token = create_jobseeker_token(
