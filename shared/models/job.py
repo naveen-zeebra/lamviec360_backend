@@ -36,6 +36,11 @@ class JobPosting(Base, TimestampMixin, SoftDeleteMixin):
     applications_count = Column(Integer, default=0)
     expires_at = Column(DateTime, nullable=True)
 
+    department = Column(String(100), nullable=True)
+    vacancies = Column(Integer, default=1, nullable=True)
+    education = Column(String(100), nullable=True)
+    documents = Column(Text, nullable=True)  # JSON-encoded array or comma-separated document names
+
     # Relationships
     company = relationship("CompanyProfile", back_populates="job_postings")
     applications = relationship("JobApplication", back_populates="job", cascade="all, delete-orphan")

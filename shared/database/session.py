@@ -40,6 +40,10 @@ def init_db() -> None:
             conn.execute(text("ALTER TABLE jobseeker_documents ADD COLUMN IF NOT EXISTS is_encrypted BOOLEAN DEFAULT TRUE;"))
             conn.execute(text("ALTER TABLE jobseeker_documents ADD COLUMN IF NOT EXISTS is_password_protected BOOLEAN DEFAULT FALSE;"))
             conn.execute(text("ALTER TABLE jobseeker_documents ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);"))
+            conn.execute(text("ALTER TABLE job_postings ADD COLUMN IF NOT EXISTS department VARCHAR(100);"))
+            conn.execute(text("ALTER TABLE job_postings ADD COLUMN IF NOT EXISTS vacancies INTEGER DEFAULT 1;"))
+            conn.execute(text("ALTER TABLE job_postings ADD COLUMN IF NOT EXISTS education VARCHAR(100);"))
+            conn.execute(text("ALTER TABLE job_postings ADD COLUMN IF NOT EXISTS documents TEXT;"))
     except Exception:
         pass
 

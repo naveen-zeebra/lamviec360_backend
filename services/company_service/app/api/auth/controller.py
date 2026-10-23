@@ -202,9 +202,61 @@ def initiate_otp_login_controller(data: LoginInitiateRequest, db: Session) -> Di
     name, domain = email.split("@") if "@" in email else (email, "")
     masked_email = f"{name[:1]}•••@{domain}" if domain else email
 
+    # Determine user role
+    user_role = getattr(user, "role", None)
+    if not user_role and hasattr(user, "roles") and user.roles:
+        first_role = user.roles[0]
+        user_role = getattr(first_role, "code", str(first_role))
+    user_role_str = str(user_role or "company_admin").lower().replace(" ", "_").replace("/", "").strip()
+    is_admin = user_role_str in ["company_admin", "admin", "owner"]
+
+    # 2FA is required ONLY for Company Admin.
+    # Other users (HR / Recruiter, Viewer, Interviewer, Hiring Manager) directly move to overview.
+    if not is_admin:
+        company_id = tenant_profile.id if tenant_profile else getattr(user, "company_id", None)
+        company_name = tenant_profile.company_name if tenant_profile else None
+        access_token = create_company_token(
+            user_id=user.id,
+            company_id=company_id or 0,
+            email=user.email,
+            role=user_role_str,
+        )
+        refresh_token = create_refresh_token(user.id)
+
+        log_audit_event(
+            db,
+            action="LOGIN",
+            module="COMPANY_AUTH",
+            description=f"Non-admin company user logged in without 2FA: {user.email} (Role: {user_role})",
+            user_id=user.id,
+            user_email=user.email,
+            user_type="company",
+            request=None,
+        )
+
+        return {
+            "status": "DIRECT_LOGIN",
+            "requires_2fa": False,
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "bearer",
+            "role": user_role or "HR / Recruiter",
+            "user": {
+                "id": user.id,
+                "email": user.email,
+                "full_name": getattr(user, "full_name", user.email),
+                "user_type": "company",
+                "role": user_role or "HR / Recruiter",
+                "company_id": company_id,
+                "company_name": company_name,
+            },
+        }
+
     return {
         "session_token": f"mock_session_{user.id}",
         "status": "OTP_SENT",
+        "requires_2fa": True,
+        "role": "Company Admin",
         "masked_email": masked_email,
     }
 
