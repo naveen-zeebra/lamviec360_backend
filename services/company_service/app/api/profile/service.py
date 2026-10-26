@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from shared.models import User, CompanyProfile
 from shared.utils.error_handler import service_error_handler
 from shared.utils.logger import get_logger
+from services.company_service.app.api.auth.service import save_base64_logo
 
 logger = get_logger("company_profile_service")
 
@@ -88,7 +89,7 @@ def update_company_profile_fields(
 
     logo_url = data_dict.get("logo_url") or data_dict.get("logo")
     if logo_url is not None:
-        profile.logo_url = logo_url
+        profile.logo_url = save_base64_logo(logo_url)
 
     company_size = data_dict.get("company_size") or data_dict.get("size")
     if company_size is not None:

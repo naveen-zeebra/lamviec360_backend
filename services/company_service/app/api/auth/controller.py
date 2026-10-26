@@ -57,6 +57,8 @@ def register_company_controller(data: CompanyRegisterRequest, request: Request, 
         size=data.size or data.company_size,
         website=data.website,
         tax_code=data.tax_id or data.tax_code or data.reg_number,
+        about=data.about or data.description,
+        logo_url=data.logo_url or data.logo,
     )
 
     # Generate and store OTP, then send email

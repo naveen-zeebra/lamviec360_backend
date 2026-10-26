@@ -44,6 +44,9 @@ def init_db() -> None:
             conn.execute(text("ALTER TABLE job_postings ADD COLUMN IF NOT EXISTS vacancies INTEGER DEFAULT 1;"))
             conn.execute(text("ALTER TABLE job_postings ADD COLUMN IF NOT EXISTS education VARCHAR(100);"))
             conn.execute(text("ALTER TABLE job_postings ADD COLUMN IF NOT EXISTS documents TEXT;"))
+            conn.execute(text("ALTER TABLE company_profiles ALTER COLUMN logo_url TYPE TEXT;"))
+            conn.execute(text("ALTER TABLE company_profiles ALTER COLUMN cover_image_url TYPE TEXT;"))
+            conn.execute(text("ALTER TABLE company_profiles ALTER COLUMN about TYPE TEXT;"))
     except Exception:
         pass
 

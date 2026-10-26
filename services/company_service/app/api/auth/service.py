@@ -6,11 +6,15 @@
 import random
 import json
 import time
+import base64
+import uuid
+from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any, Tuple
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 
+from shared.environment import env
 from shared.models import User, CompanyProfile, Role, CompanyUser, CompanyInvitation
 from shared.utils.error_handler import service_error_handler
 from shared.utils.password import hash_password, verify_password
@@ -21,6 +25,36 @@ logger = get_logger("company_auth_service")
 
 # In-memory verification cache: email -> { "code": str, "expires_at": datetime }
 _VERIFICATION_CACHE: Dict[str, dict] = {}
+
+
+def save_base64_logo(data_url: Optional[str]) -> Optional[str]:
+    """Save base64 data URL to uploads/logos/ and return public URL."""
+    if not data_url or not isinstance(data_url, str):
+        return data_url
+    if not data_url.startswith("data:image/"):
+        return data_url
+
+    try:
+        header, base64_data = data_url.split(",", 1)
+        ext = "png"
+        if "jpeg" in header or "jpg" in header:
+            ext = "jpg"
+        elif "webp" in header:
+            ext = "webp"
+        elif "svg" in header:
+            ext = "svg"
+
+        upload_root = Path(str(env.UPLOAD_DIR or "./uploads")).resolve()
+        logo_dir = upload_root / "logos"
+        logo_dir.mkdir(parents=True, exist_ok=True)
+
+        filename = f"logo_{uuid.uuid4().hex[:12]}.{ext}"
+        target_path = logo_dir / filename
+        target_path.write_bytes(base64.b64decode(base64_data))
+        return f"/uploads/logos/{filename}"
+    except Exception as e:
+        logger.warning(f"Failed to decode base64 logo: {e}")
+        return data_url
 
 
 @service_error_handler
@@ -44,6 +78,8 @@ def create_company_user_and_profile(
     size: Optional[str] = None,
     website: Optional[str] = None,
     tax_code: Optional[str] = None,
+    about: Optional[str] = None,
+    logo_url: Optional[str] = None,
 ) -> Tuple[User, CompanyProfile]:
     """Create new company employer user, company profile, and initial company admin user."""
     parts = (contact_name or company_name or "Representative").strip().split(" ", 1)
@@ -67,6 +103,8 @@ def create_company_user_and_profile(
     db.add(user)
     db.flush()
 
+    final_logo_url = save_base64_logo(logo_url)
+
     profile = CompanyProfile(
         user_id=user.id,
         company_name=company_name or "New Company",
@@ -74,6 +112,8 @@ def create_company_user_and_profile(
         company_size=size or "11-50",
         website=website,
         tax_code=tax_code,
+        about=about,
+        logo_url=final_logo_url,
         verification_status="pending",
     )
     db.add(profile)
