@@ -15,6 +15,7 @@ from .schemas import (
     TeamInviteRequest,
     MemberRoleUpdateRequest,
     MemberStatusUpdateRequest,
+    CustomRoleCreateRequest,
 )
 from .controller import (
     get_company_team_controller,
@@ -24,22 +25,33 @@ from .controller import (
     update_member_role_controller,
     update_member_status_controller,
     remove_team_member_controller,
+    get_company_roles_controller,
+    create_custom_role_controller,
 )
+from .roles import require_company_permission
 
 router = APIRouter(prefix="/team", tags=["Company Team Management"])
 
 
-def require_company_admin_role(user: Any = Depends(get_current_company_user)) -> Any:
-    """Ensure the authenticated company user holds administrator privileges."""
-    if getattr(user, "is_superuser", False):
-        return user
-    user_role = getattr(user, "role", None) or getattr(user, "user_type", None)
-    if user_role not in ["company_admin", "admin", "super_admin"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only Company Administrators can perform team modifications",
-        )
-    return user
+@router.get("/roles", response_model=APIResponse[dict], summary="Get Company Roles & Available Permissions")
+def get_company_roles(
+    user: Any = Depends(get_current_company_user),
+    db: Session = Depends(get_db),
+):
+    """Retrieve dynamic company roles (core + custom) and available permission catalog."""
+    data = get_company_roles_controller(user, db)
+    return success_response(data=data, message="Company roles retrieved successfully")
+
+
+@router.post("/roles", response_model=APIResponse[dict], summary="Create Custom Company Role")
+def create_custom_role(
+    req: CustomRoleCreateRequest,
+    user: Any = Depends(require_company_permission("team.manage")),
+    db: Session = Depends(get_db),
+):
+    """Register a new tenant custom role with custom granular permissions."""
+    created = create_custom_role_controller(req, user, db)
+    return success_response(data=created, message=f"Custom role '{req.name}' created successfully")
 
 
 @router.get("", response_model=APIResponse[dict], summary="Get Team Members & Invitations")
@@ -58,10 +70,10 @@ def get_company_team(
 @router.post("/invite", response_model=APIResponse[dict], summary="Invite Team Member")
 def invite_team_member(
     req: TeamInviteRequest,
-    user: Any = Depends(require_company_admin_role),
+    user: Any = Depends(require_company_permission("team.manage")),
     db: Session = Depends(get_db),
 ):
-    """Dispatch invitation to a new employee. Restricted to Company Admins."""
+    """Dispatch invitation to a new employee. Enforces permission-level check (team.manage)."""
     invite = invite_team_member_controller(req, user, db)
     return success_response(
         data=invite,
@@ -72,10 +84,10 @@ def invite_team_member(
 @router.delete("/invites/{invite_id}", response_model=APIResponse[dict], summary="Revoke Team Invitation")
 def revoke_team_invitation(
     invite_id: str,
-    user: Any = Depends(require_company_admin_role),
+    user: Any = Depends(require_company_permission("team.manage")),
     db: Session = Depends(get_db),
 ):
-    """Revoke a pending team invitation. Restricted to Company Admins."""
+    """Revoke a pending team invitation. Enforces permission-level check (team.manage)."""
     revoke_team_invitation_controller(invite_id, user, db)
     return success_response(message="Invitation revoked")
 
@@ -83,10 +95,10 @@ def revoke_team_invitation(
 @router.post("/invites/{invite_id}/resend", response_model=APIResponse[dict], summary="Resend Team Invitation")
 def resend_team_invitation(
     invite_id: str,
-    user: Any = Depends(require_company_admin_role),
+    user: Any = Depends(require_company_permission("team.manage")),
     db: Session = Depends(get_db),
 ):
-    """Resend and refresh an existing invitation. Restricted to Company Admins."""
+    """Resend and refresh an existing invitation. Enforces permission-level check (team.manage)."""
     resend_team_invitation_controller(invite_id, user, db)
     return success_response(message="Invitation resent successfully")
 
@@ -95,10 +107,10 @@ def resend_team_invitation(
 def update_member_role(
     member_id: str,
     req: MemberRoleUpdateRequest,
-    user: Any = Depends(require_company_admin_role),
+    user: Any = Depends(require_company_permission("team.manage")),
     db: Session = Depends(get_db),
 ):
-    """Update role for a team member. Restricted to Company Admins."""
+    """Update role for a team member. Enforces permission-level check (team.manage)."""
     update_member_role_controller(member_id, req, user, db)
     return success_response(message=f"Role updated to {req.role}")
 
@@ -107,10 +119,10 @@ def update_member_role(
 def update_member_status(
     member_id: str,
     req: MemberStatusUpdateRequest,
-    user: Any = Depends(require_company_admin_role),
+    user: Any = Depends(require_company_permission("team.manage")),
     db: Session = Depends(get_db),
 ):
-    """Activate or deactivate team member. Restricted to Company Admins."""
+    """Activate or deactivate team member. Enforces permission-level check (team.manage)."""
     update_member_status_controller(member_id, req, user, db)
     return success_response(message=f"Member status updated to {req.status}")
 
@@ -118,9 +130,10 @@ def update_member_status(
 @router.delete("/members/{member_id}", response_model=APIResponse[dict], summary="Remove Member from Company")
 def remove_team_member(
     member_id: str,
-    user: Any = Depends(require_company_admin_role),
+    user: Any = Depends(require_company_permission("team.manage")),
     db: Session = Depends(get_db),
 ):
-    """Remove team member from company tenant. Restricted to Company Admins."""
+    """Remove team member from company tenant. Enforces permission-level check (team.manage)."""
     remove_team_member_controller(member_id, user, db)
     return success_response(message="Member removed successfully")
+

@@ -98,3 +98,36 @@ class ChangePasswordRequest(BaseModel):
         elif not self.old_password and not self.current_password:
             raise ValueError("Current password is required")
         return self
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, v: str) -> str:
+        return v.strip().lower()
+
+
+class ResetPasswordRequest(BaseModel):
+    token: Optional[str] = None
+    email: Optional[EmailStr] = None
+    code: Optional[str] = None
+    new_password: str = Field(..., min_length=6)
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, v: Optional[str]) -> Optional[str]:
+        return v.strip().lower() if v else None
+
+
+class VerifyResetOtpRequest(BaseModel):
+    email: EmailStr
+    code: str = Field(..., min_length=4, max_length=10)
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, v: str) -> str:
+        return v.strip().lower()
+
+

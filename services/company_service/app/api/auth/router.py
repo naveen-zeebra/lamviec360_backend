@@ -28,6 +28,9 @@ from .schemas import (
     ActivateInviteRequest,
     RefreshTokenRequest,
     ChangePasswordRequest,
+    ForgotPasswordRequest,
+    ResetPasswordRequest,
+    VerifyResetOtpRequest,
 )
 from shared.schemas.company_team import InvitationAcceptRequest
 from .controller import (
@@ -42,6 +45,9 @@ from .controller import (
     get_company_me_controller,
     refresh_token_controller,
     change_password_controller,
+    forgot_password_controller,
+    verify_reset_otp_controller,
+    reset_password_controller,
 )
 
 router = APIRouter(prefix="/auth", tags=["Company Auth"])
@@ -154,6 +160,35 @@ def change_password(
 ):
     res = change_password_controller(req, user, db)
     return success_response(message=res.get("message", "Password updated successfully"))
+
+
+@router.post("/forgot-password", response_model=APIResponse[dict], summary="Company Forgot Password")
+@limiter.limit("5/minute")
+def forgot_password(req: ForgotPasswordRequest, request: Request, db: Session = Depends(get_db)):
+    data = forgot_password_controller(req, request, db)
+    return success_response(
+        data=data,
+        message="If this email is registered, a password reset link has been sent.",
+    )
+
+
+@router.post("/verify-reset-otp", response_model=APIResponse[dict], summary="Verify Password Reset OTP")
+@limiter.limit("10/minute")
+def verify_reset_otp(req: VerifyResetOtpRequest, request: Request, db: Session = Depends(get_db)):
+    data = verify_reset_otp_controller(req, request, db)
+    return success_response(
+        data=data,
+        message="Verification code confirmed successfully",
+    )
+
+
+@router.post("/reset-password", response_model=APIResponse[dict], summary="Company Reset Password")
+@limiter.limit("10/minute")
+def reset_password(req: ResetPasswordRequest, request: Request, db: Session = Depends(get_db)):
+    reset_password_controller(req, request, db)
+    return success_response(
+        message="Password updated successfully. You can now login with your new password.",
+    )
 
 
 @router.get("/validate-tax-id/{tax_id}", response_model=APIResponse[dict], summary="Validate Vietnam Business Tax ID via VietQR")

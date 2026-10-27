@@ -19,7 +19,7 @@ from shared.models import User, CompanyProfile, Role, CompanyUser, CompanyInvita
 from shared.utils.error_handler import service_error_handler
 from shared.utils.password import hash_password, verify_password
 from shared.utils.logger import get_logger
-from shared.utils.jwt import create_access_token, create_company_token
+from shared.utils.jwt import create_access_token, create_company_token, decode_token, create_password_reset_token
 
 logger = get_logger("company_auth_service")
 
@@ -267,6 +267,113 @@ def change_company_user_password(db: Session, user: Any, old_password: str, new_
     db.commit()
     logger.info(f"Password changed successfully for company user id={user.id}")
     return True
+
+
+@service_error_handler
+def resolve_company_reset_user(
+    db: Session,
+    raw_token: Optional[str],
+    raw_code: Optional[str],
+    target_email: Optional[str],
+) -> Optional[Any]:
+    """Resolve company user from JWT reset token or email + OTP code."""
+    user = None
+
+    # 1. Try JWT token
+    if raw_token and raw_token.count(".") == 2:
+        try:
+            payload = decode_token(raw_token)
+            if payload.get("type") == "password_reset":
+                email_in_token = (payload.get("email") or "").strip().lower()
+                user_id = payload.get("sub")
+                if email_in_token:
+                    user = get_user_by_email(db, email_in_token)
+                elif user_id:
+                    user = get_company_user_by_id(db, int(user_id))
+        except Exception as e:
+            logger.warning(f"Error decoding company password reset token: {e}")
+            user = None
+
+    # 2. Try email + code (or raw_token used as code)
+    if not user and target_email:
+        clean_email = target_email.strip().lower()
+        submitted_code = (raw_code or raw_token or "").strip()
+        if submitted_code and check_verification_code(clean_email, submitted_code):
+            user = get_user_by_email(db, clean_email)
+            clear_verification_code(clean_email)
+
+    # 3. Enforce company scope: only company users allowed
+    if user:
+        if getattr(user, "user_type", None) == "company" or getattr(user, "role_type", None) == "company":
+            return user
+        if isinstance(user, CompanyUser):
+            return user
+        if hasattr(user, "company_profile") and user.company_profile:
+            return user
+        return None
+
+    return None
+
+
+@service_error_handler
+def update_company_user_password(db: Session, user: Any, new_password: str) -> None:
+    """Update password for company user across both CompanyUser and legacy User tables."""
+    new_hash = hash_password(new_password)
+    user_email = (getattr(user, "email", None) or "").strip().lower()
+
+    if hasattr(user, "password_hash"):
+        user.password_hash = new_hash
+    if hasattr(user, "hashed_password"):
+        user.hashed_password = new_hash
+
+    # Synchronize companion record if exists for this email
+    if user_email:
+        cu = db.query(CompanyUser).filter(CompanyUser.email == user_email, CompanyUser.is_deleted == False).first()
+        if cu and cu.id != getattr(user, "id", None):
+            cu.password_hash = new_hash
+        u = db.query(User).filter(User.email == user_email, User.is_deleted == False).first()
+        if u and u.id != getattr(user, "id", None):
+            u.hashed_password = new_hash
+
+    db.commit()
+    logger.info(f"Password reset successfully for company user: {user_email}")
+
+
+@service_error_handler
+def verify_company_reset_otp(db: Session, email: str, code: str) -> Dict[str, Any]:
+    """Validate 6-digit verification code and return a temporary reset token."""
+    clean_email = (email or "").strip().lower()
+    clean_code = (code or "").strip()
+
+    if not clean_code or not check_verification_code(clean_email, clean_code):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired verification code. Please check your code and try again.",
+        )
+
+    user = get_user_by_email(db, clean_email)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No company account found with this email address.",
+        )
+
+    if not getattr(user, "is_active", True):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your company account is inactive. Please contact support.",
+        )
+
+    clear_verification_code(clean_email)
+    reset_token = create_password_reset_token(user_id=user.id, email=user.email, expires_delta=timedelta(minutes=15))
+
+    logger.info(f"OTP verified successfully for company user: {clean_email}")
+    return {
+        "verified": True,
+        "reset_token": reset_token,
+        "email": clean_email,
+        "message": "Verification code confirmed successfully",
+    }
 
 
 @service_error_handler

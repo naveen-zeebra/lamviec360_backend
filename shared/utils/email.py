@@ -137,15 +137,26 @@ If you did not request this verification, please disregard this email.
 def send_password_reset_email(
     to_email: str,
     reset_token: str,
+    otp_code: Optional[str] = None,
     reset_url: Optional[str] = None,
     name: Optional[str] = None,
 ) -> bool:
-    """Dispatches a password reset link and token."""
+    """Dispatches a password reset link and token/OTP."""
     display_name = name or "Candidate"
-    subject = "Reset your LamViec360 password"
+    subject = f"{otp_code} is your LamViec360 password reset code" if otp_code else "Reset your LamViec360 password"
 
     if not reset_url:
         reset_url = f"{env.JOBSEEKER_WEB_URL}/reset-password?token={reset_token}&email={to_email}"
+
+    otp_block_html = ""
+    if otp_code:
+        otp_block_html = f"""
+      <div style="margin: 24px 0; text-align: center;">
+        <div style="font-size: 12px; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">Verification Code (OTP)</div>
+        <div style="display: inline-block; font-size: 34px; font-weight: 800; letter-spacing: 8px; color: #2563eb; background: #eff6ff; border: 2px dashed #93c5fd; padding: 12px 24px; border-radius: 10px; font-family: monospace;">{otp_code}</div>
+        <div style="font-size: 13px; color: #64748b; margin-top: 8px;">Enter this 6-digit code on the reset password screen. Valid for 15 minutes.</div>
+      </div>
+"""
 
     html_content = f"""<!DOCTYPE html>
 <html>
@@ -175,6 +186,7 @@ def send_password_reset_email(
       <p style="color: #475569; font-size: 15px; line-height: 1.6;">
         We received a request to reset the password for your LamViec360 account associated with <strong>{to_email}</strong>.
       </p>
+      {otp_block_html}
       <div class="btn-container">
         <a href="{reset_url}" class="btn" target="_blank">Reset Password</a>
       </div>
@@ -184,11 +196,8 @@ def send_password_reset_email(
       <div class="link-box">
         <a href="{reset_url}" style="color: #2563eb; text-decoration: none;">{reset_url}</a>
       </div>
-      <div class="token-preview">
-        Reset Token: <code>{reset_token}</code>
-      </div>
       <p style="color: #94a3b8; font-size: 12px; margin-top: 24px; line-height: 1.5;">
-        This link is valid for 1 hour. If you didn't request a password reset, you can safely ignore this email; your password will not be changed.
+        This code and link are valid for 15 minutes. If you didn't request a password reset, you can safely ignore this email; your password will not be changed.
       </p>
     </div>
     <div class="footer">
@@ -198,16 +207,17 @@ def send_password_reset_email(
 </body>
 </html>"""
 
+    otp_text = f"\nYour 6-Digit Verification Code: {otp_code}\n(This code expires in 15 minutes)\n" if otp_code else ""
     text_content = f"""Hi {display_name},
 
 We received a request to reset your password for LamViec360.
-Click the link below to set a new password:
-
+{otp_text}
+You can also click the link below to set a new password:
 {reset_url}
 
 Reset Token: {reset_token}
 
-This link is valid for 1 hour. If you did not request this, please ignore this email.
+This verification code expires in 15 minutes. If you did not request this, please ignore this email.
 """
 
     return send_email(to_email=to_email, subject=subject, html_content=html_content, text_content=text_content)

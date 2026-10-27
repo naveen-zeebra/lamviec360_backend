@@ -7,13 +7,16 @@ from typing import Dict, Any, Optional
 from fastapi import HTTPException, Request, status
 from sqlalchemy.orm import Session
 
+from shared.environment import env
 from shared.models import User
 from shared.utils import (
     create_access_token,
     create_refresh_token,
     create_company_token,
+    create_password_reset_token,
     decode_token,
     send_verification_email,
+    send_password_reset_email,
     log_audit_event,
 )
 from shared.utils.logger import get_logger
@@ -29,6 +32,9 @@ from .schemas import (
     ActivateInviteRequest,
     RefreshTokenRequest,
     ChangePasswordRequest,
+    ForgotPasswordRequest,
+    ResetPasswordRequest,
+    VerifyResetOtpRequest,
 )
 
 logger = get_logger("company_auth_controller")
@@ -506,3 +512,90 @@ def change_password_controller(data: ChangePasswordRequest, user: User, db: Sess
     if not success:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is incorrect")
     return {"message": "Password updated successfully"}
+
+
+def forgot_password_controller(data: ForgotPasswordRequest, request: Request, db: Session) -> Dict[str, Any]:
+    """Generate company reset token/OTP and dispatch email."""
+    target_email = data.email.strip().lower()
+    user = service.get_user_by_email(db, target_email)
+
+    if user and getattr(user, "is_active", True):
+        is_company = (
+            getattr(user, "user_type", None) == "company"
+            or getattr(user, "role_type", None) == "company"
+            or hasattr(user, "company_id")
+            or hasattr(user, "company_profile")
+        )
+        if is_company:
+            code = service.store_verification_code(user.email, expiry_minutes=15)
+            token = create_password_reset_token(user_id=user.id, email=user.email)
+            reset_url = f"{env.COMPANY_WEB_URL}/reset-password?token={token}&email={user.email}&code={code}"
+            display_name = getattr(user, "full_name", None) or getattr(user, "first_name", None) or "Representative"
+            send_password_reset_email(
+                to_email=user.email,
+                reset_token=token,
+                otp_code=code,
+                reset_url=reset_url,
+                name=display_name,
+            )
+
+            log_audit_event(
+                db,
+                action="FORGOT_PASSWORD",
+                module="COMPANY_AUTH",
+                description=f"Company password reset OTP and link sent to {user.email}",
+                user_id=user.id,
+                user_email=user.email,
+                user_type="company",
+                request=request,
+            )
+
+    return {"email": target_email}
+
+
+def verify_reset_otp_controller(data: VerifyResetOtpRequest, request: Request, db: Session) -> Dict[str, Any]:
+    """Validate 6-digit OTP code submitted by company recruiter and issue a verified reset token."""
+    res = service.verify_company_reset_otp(db, data.email, data.code)
+    log_audit_event(
+        db,
+        action="VERIFY_RESET_OTP",
+        module="COMPANY_AUTH",
+        description=f"Company password reset OTP verified for {data.email}",
+        user_email=data.email,
+        user_type="company",
+        request=request,
+    )
+    return res
+
+
+def reset_password_controller(data: ResetPasswordRequest, request: Request, db: Session) -> None:
+    """Validate company reset token/code and set new password."""
+    target_email = data.email.strip().lower() if data.email else None
+    user = service.resolve_company_reset_user(db, data.token, data.code, target_email)
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset token/code. Please request a new password reset link.",
+        )
+
+    if not getattr(user, "is_active", True):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your company account is inactive. Please contact support.",
+        )
+
+    service.update_company_user_password(db, user, data.new_password)
+
+    log_audit_event(
+        db,
+        action="RESET_PASSWORD",
+        module="COMPANY_AUTH",
+        description=f"Company password reset successfully for {user.email}",
+        user_id=user.id,
+        user_email=user.email,
+        user_type="company",
+        request=request,
+    )
+
+

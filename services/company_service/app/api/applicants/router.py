@@ -28,6 +28,7 @@ from .controller import (
     get_applicant_verification_documents_controller,
     download_applicant_verification_document_controller,
 )
+from ..team.roles import require_company_permission
 
 router = APIRouter(prefix="/applicants", tags=["ATS Applicant Management"])
 
@@ -35,7 +36,7 @@ router = APIRouter(prefix="/applicants", tags=["ATS Applicant Management"])
 @router.get("/stage-counts", response_model=APIResponse[dict], summary="Get ATS Stage Counts")
 def get_applicant_stage_counts(
     job_id: Optional[int] = Query(None),
-    user: Any = Depends(get_current_company_user),
+    user: Any = Depends(require_company_permission("candidates.view")),
     db: Session = Depends(get_db),
 ):
     counts = get_stage_counts_controller(user, job_id, db)
@@ -53,7 +54,7 @@ def list_applicants(
     sort_order: Optional[str] = Query("desc"),
     page: int = Query(1, ge=1),
     page_size: int = Query(25, ge=1, le=100),
-    user: Any = Depends(get_current_company_user),
+    user: Any = Depends(require_company_permission("candidates.view")),
     db: Session = Depends(get_db),
 ):
     resolved_status = status_filter or stage_filter
@@ -81,7 +82,7 @@ def list_applicants(
 @router.get("/{application_id}", response_model=APIResponse[dict], summary="Get Applicant Detail")
 def get_applicant_detail(
     application_id: int,
-    user: Any = Depends(get_current_company_user),
+    user: Any = Depends(require_company_permission("candidates.view")),
     db: Session = Depends(get_db),
 ):
     return success_response(data=get_applicant_detail_controller(application_id, user, db))
@@ -92,7 +93,7 @@ def update_applicant_status(
     application_id: int,
     data: ApplicantStatusUpdateSchema,
     request: Request,
-    user: Any = Depends(get_current_company_user),
+    user: Any = Depends(require_company_permission("candidates.manage")),
     db: Session = Depends(get_db),
 ):
     result = update_applicant_status_controller(application_id, data, user, request, db)
@@ -102,7 +103,7 @@ def update_applicant_status(
 @router.post("/bulk-stage", response_model=APIResponse[dict], summary="Bulk Update Applicant Stage")
 def bulk_update_applicant_status(
     data: BulkStageRequest,
-    user: Any = Depends(get_current_company_user),
+    user: Any = Depends(require_company_permission("candidates.manage")),
     db: Session = Depends(get_db),
 ):
     count = bulk_update_status_controller(data, user, db)
@@ -113,7 +114,7 @@ def bulk_update_applicant_status(
 def add_candidate_note(
     application_id: int,
     data: CandidateNoteRequest,
-    user: Any = Depends(get_current_company_user),
+    user: Any = Depends(require_company_permission("candidates.notes")),
     db: Session = Depends(get_db),
 ):
     add_note_controller(application_id, data, user, db)
@@ -124,7 +125,7 @@ def add_candidate_note(
 def schedule_candidate_interview(
     application_id: int,
     data: ScheduleInterviewRequest,
-    user: Any = Depends(get_current_company_user),
+    user: Any = Depends(require_company_permission("candidates.manage")),
     db: Session = Depends(get_db),
 ):
     schedule_interview_controller(application_id, data, user, db)
@@ -136,7 +137,7 @@ def schedule_candidate_interview(
 @router.get("/{application_id}/verification-documents", response_model=APIResponse[dict], summary="Get candidate verification documents (Shortlisted stage onward)")
 def get_applicant_verification_documents(
     application_id: int,
-    user: Any = Depends(get_current_company_user),
+    user: Any = Depends(require_company_permission("candidates.documents")),
     db: Session = Depends(get_db),
 ):
     return success_response(data=get_applicant_verification_documents_controller(application_id, user, db))
@@ -146,7 +147,7 @@ def get_applicant_verification_documents(
 def download_applicant_verification_document(
     application_id: int,
     doc_id: int,
-    user: Any = Depends(get_current_company_user),
+    user: Any = Depends(require_company_permission("candidates.documents")),
     db: Session = Depends(get_db),
 ):
     content, row = download_applicant_verification_document_controller(application_id, doc_id, user, db)
@@ -155,3 +156,4 @@ def download_applicant_verification_document(
         media_type=row.mime_type or "application/octet-stream",
         headers={"Content-Disposition": f'attachment; filename="{row.file_name}"'},
     )
+

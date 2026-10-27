@@ -21,6 +21,8 @@ STAGE_CANONICAL_MAP: Dict[str, str] = {
     "applied": "Applied",
     "screening": "Screening",
     "reviewing": "Screening",
+    "phone_screening": "Phone Screening",
+    "phone screening": "Phone Screening",
     "shortlisted": "Shortlisted",
     "interviewing": "Interview Scheduled",
     "interview": "Interview Scheduled",
@@ -29,18 +31,25 @@ STAGE_CANONICAL_MAP: Dict[str, str] = {
     "offer": "Offer Sent",
     "offer sent": "Offer Sent",
     "hired": "Hired",
+    "post_hire_tracking": "Post-Hire Tracking",
+    "post hire tracking": "Post-Hire Tracking",
+    "post-hire tracking": "Post-Hire Tracking",
     "rejected": "Rejected",
 }
 
 STAGE_FILTER_EXPANSION: Dict[str, List[str]] = {
     "applied": ["applied", "Applied"],
     "screening": ["screening", "reviewing", "Screening"],
+    "phone screening": ["phone screening", "phone_screening", "Phone Screening"],
+    "phone_screening": ["phone screening", "phone_screening", "Phone Screening"],
     "shortlisted": ["shortlisted", "Shortlisted"],
     "interview scheduled": ["interview scheduled", "interviewing", "interview", "Interview Scheduled"],
     "interviewing": ["interview scheduled", "interviewing", "interview", "Interview Scheduled"],
     "offer sent": ["offer sent", "offer", "offer_sent", "Offer Sent"],
     "offer_sent": ["offer sent", "offer", "offer_sent", "Offer Sent"],
     "hired": ["hired", "Hired"],
+    "post-hire tracking": ["post-hire tracking", "post_hire_tracking", "Post-Hire Tracking"],
+    "post_hire_tracking": ["post-hire tracking", "post_hire_tracking", "Post-Hire Tracking"],
     "rejected": ["rejected", "Rejected"],
 }
 
@@ -54,6 +63,8 @@ SHORTLISTED_OR_BEYOND_STAGES = {
     "offer sent",
     "offer_sent",
     "hired",
+    "post_hire_tracking",
+    "post-hire tracking",
 }
 
 

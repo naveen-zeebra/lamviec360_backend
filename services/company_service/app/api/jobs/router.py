@@ -21,8 +21,10 @@ from .controller import (
     duplicate_job_controller,
     delete_job_controller,
 )
+from ..team.roles import require_company_permission
 
 router = APIRouter(prefix="/jobs", tags=["Company Job Management"])
+
 
 
 @router.get("", response_model=PaginatedResponse[dict], summary="List Company Jobs")
@@ -30,7 +32,7 @@ def list_company_jobs(
     status_filter: Optional[str] = Query(None, alias="status"),
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=100),
-    user: Any = Depends(get_current_company_user),
+    user: Any = Depends(require_company_permission("jobs.view")),
     db: Session = Depends(get_db),
 ):
     items, total_items = list_jobs_controller(user, status_filter, page, page_size, db)
@@ -47,7 +49,7 @@ def list_company_jobs(
 def create_job_posting(
     data: CompanyJobCreateRequest,
     request: Request,
-    user: Any = Depends(get_current_company_user),
+    user: Any = Depends(require_company_permission("jobs.manage")),
     db: Session = Depends(get_db),
 ):
     result = create_job_controller(data, user, request, db)
@@ -57,7 +59,7 @@ def create_job_posting(
 @router.get("/{job_id}", response_model=APIResponse[dict], summary="Get Company Job Details")
 def get_company_job(
     job_id: int,
-    user: Any = Depends(get_current_company_user),
+    user: Any = Depends(require_company_permission("jobs.view")),
     db: Session = Depends(get_db),
 ):
     return success_response(data=get_job_controller(job_id, user, db))
@@ -67,7 +69,7 @@ def get_company_job(
 def update_company_job(
     job_id: int,
     data: CompanyJobUpdateRequest,
-    user: Any = Depends(get_current_company_user),
+    user: Any = Depends(require_company_permission("jobs.manage")),
     db: Session = Depends(get_db),
 ):
     result = update_job_controller(job_id, data, user, db)
@@ -78,7 +80,7 @@ def update_company_job(
 def toggle_job_status(
     job_id: int,
     status_val: str = Query(..., alias="status", pattern="^(?i)(published|draft|closed|paused|active)$"),
-    user: Any = Depends(get_current_company_user),
+    user: Any = Depends(require_company_permission("jobs.manage")),
     db: Session = Depends(get_db),
 ):
     norm_status = toggle_status_controller(job_id, status_val, user, db)
@@ -88,7 +90,7 @@ def toggle_job_status(
 @router.post("/{job_id}/duplicate", response_model=APIResponse[dict], summary="Duplicate Job")
 def duplicate_company_job(
     job_id: int,
-    user: Any = Depends(get_current_company_user),
+    user: Any = Depends(require_company_permission("jobs.manage")),
     db: Session = Depends(get_db),
 ):
     result = duplicate_job_controller(job_id, user, db)
@@ -98,8 +100,9 @@ def duplicate_company_job(
 @router.delete("/{job_id}", response_model=APIResponse[None], summary="Delete Job")
 def delete_company_job(
     job_id: int,
-    user: Any = Depends(get_current_company_user),
+    user: Any = Depends(require_company_permission("jobs.manage")),
     db: Session = Depends(get_db),
 ):
     delete_job_controller(job_id, user, db)
     return success_response(message="Job posting deleted successfully")
+

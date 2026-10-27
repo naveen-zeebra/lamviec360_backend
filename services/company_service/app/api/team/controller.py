@@ -77,3 +77,21 @@ def remove_team_member_controller(member_id: str, user: Any, db: Session) -> Non
     found = service.remove_team_member(db, profile, user, member_id)
     if not found:
         raise HTTPException(status_code=404, detail="Team member not found")
+
+
+def get_company_roles_controller(user: Any, db: Session) -> Dict[str, Any]:
+    """Retrieve dynamic roles and available permission catalog for tenant."""
+    from .roles import get_company_roles, AVAILABLE_PERMISSIONS
+    profile = service.get_tenant_profile(db, user)
+    roles = get_company_roles(profile.id if profile else None, db)
+    return {
+        "roles": roles,
+        "permissions": AVAILABLE_PERMISSIONS,
+    }
+
+
+def create_custom_role_controller(req: Any, user: Any, db: Session) -> Dict[str, Any]:
+    """Create a new tenant custom role."""
+    profile = service.get_tenant_profile(db, user)
+    return service.create_custom_company_role(db, profile, user, req)
+

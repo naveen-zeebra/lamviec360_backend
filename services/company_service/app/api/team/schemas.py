@@ -14,3 +14,11 @@ class MemberRoleUpdateRequest(BaseModel):
 
 class MemberStatusUpdateRequest(BaseModel):
     status: str
+
+
+class CustomRoleCreateRequest(BaseModel):
+    code: str
+    name: str
+    description: Optional[str] = ""
+    color_tone: Optional[str] = "indigo"
+    permissions: list[str] = []

@@ -18,6 +18,7 @@ from shared.utils.logger import get_logger
 logger = get_logger("company_team_service")
 
 from ..tenant import get_tenant_profile
+from .roles import normalize_role_code, get_company_roles
 
 
 def load_settings(profile: CompanyProfile) -> Dict[str, Any]:
@@ -134,21 +135,11 @@ def create_team_invite(
 ) -> Dict[str, Any]:
     """Create a new team invitation in database and dispatch invitation email."""
     clean_email = email.lower().strip()
-    clean_role = role.lower().replace(" ", "_").replace("/", "").strip()
-    if clean_role in ["hr__recruiter", "hr_recruiter", "recruiter"]:
-        clean_role = "recruiter"
-    elif clean_role in ["company_admin", "admin"]:
-        clean_role = "company_admin"
-    elif clean_role in ["hiring_manager", "manager"]:
-        clean_role = "hiring_manager"
-    elif clean_role in ["interviewer"]:
-        clean_role = "interviewer"
-    else:
-        clean_role = role
+    clean_role = normalize_role_code(role)
 
     now = datetime.now(timezone.utc)
     invite_token = str(uuid.uuid4())
-    expiry = now + timedelta(days=7)
+    expiry = now + timedelta(hours=72)
     user_id = getattr(user, "id", None)
 
     # Check if there is an existing pending invite for this email in this company
@@ -241,10 +232,10 @@ def resend_team_invite(db: Session, profile: CompanyProfile, user: Any, invite_i
         ).first()
 
     if inv:
-        inv.expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+        inv.expires_at = datetime.now(timezone.utc) + timedelta(hours=72)
         inv.status = "pending"
         db.commit()
-        logger.info(f"Team invite id={invite_id} renewed and resent")
+        logger.info(f"Team invite id={invite_id} renewed and resent (72h expiry)")
         return True
 
     return False
@@ -258,7 +249,7 @@ def update_team_member_role(
     member_id: str,
     new_role: str,
 ) -> bool:
-    """Update role for a company team member."""
+    """Update role for a company team member with sole admin demotion safeguard."""
     if not member_id.isdigit():
         return False
 
@@ -271,8 +262,23 @@ def update_team_member_role(
     if not member:
         return False
 
-    # Normalize role
-    clean_role = new_role.lower().replace(" ", "_").strip()
+    clean_role = normalize_role_code(new_role)
+
+    # Safeguard: Prevent demoting the only active company_admin
+    if member.role in ["company_admin", "admin"] and clean_role not in ["company_admin", "admin"]:
+        other_admins = db.query(CompanyUser).filter(
+            CompanyUser.company_id == profile.id,
+            CompanyUser.role.in_(["company_admin", "admin"]),
+            CompanyUser.is_active == True,
+            CompanyUser.id != member.id,
+            CompanyUser.is_deleted == False,
+        ).count()
+        if other_admins == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot demote the only Company Administrator. Designate another admin first.",
+            )
+
     member.role = clean_role
     db.commit()
     logger.info(f"Member id={member_id} role updated to {clean_role} in company {profile.id}")
@@ -363,3 +369,58 @@ def remove_team_member(
     db.commit()
     logger.info(f"Member id={member_id} removed from company {profile.id}")
     return True
+
+
+@service_error_handler
+def create_custom_company_role(
+    db: Session,
+    profile: CompanyProfile,
+    user: Any,
+    role_data: Any,
+) -> Dict[str, Any]:
+    """Register a tenant custom role in company profile settings."""
+    import json
+    raw_settings = profile.settings or {}
+    if isinstance(raw_settings, str):
+        try:
+            settings = json.loads(raw_settings)
+        except Exception:
+            settings = {}
+    else:
+        settings = dict(raw_settings)
+
+    custom_roles = list(settings.get("custom_roles") or [])
+
+    clean_code = normalize_role_code(role_data.code or role_data.name)
+    # Disallow overwriting core roles
+    if clean_code in ["company_admin", "admin", "recruiter", "viewer"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot override built-in core role '{clean_code}'.",
+        )
+
+    # Check if already exists in custom_roles
+    for r in custom_roles:
+        if r.get("code") == clean_code:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Role with code '{clean_code}' already exists.",
+            )
+
+    new_entry = {
+        "id": clean_code,
+        "code": clean_code,
+        "name": role_data.name,
+        "description": role_data.description or "Custom organizational role",
+        "color_tone": getattr(role_data, "color_tone", "indigo") or "indigo",
+        "is_system": False,
+        "permissions": role_data.permissions or ["overview.view"],
+    }
+    custom_roles.append(new_entry)
+    settings["custom_roles"] = custom_roles
+    profile.settings = settings
+    db.commit()
+    db.refresh(profile)
+    logger.info(f"Custom role '{clean_code}' added to company {profile.id}")
+    return new_entry
+
