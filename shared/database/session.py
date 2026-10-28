@@ -47,6 +47,8 @@ def init_db() -> None:
             conn.execute(text("ALTER TABLE company_profiles ALTER COLUMN logo_url TYPE TEXT;"))
             conn.execute(text("ALTER TABLE company_profiles ALTER COLUMN cover_image_url TYPE TEXT;"))
             conn.execute(text("ALTER TABLE company_profiles ALTER COLUMN about TYPE TEXT;"))
+            conn.execute(text("ALTER TABLE company_profiles ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT TRUE;"))
+            conn.execute(text("ALTER TABLE company_profiles ADD COLUMN IF NOT EXISTS tagline VARCHAR(255);"))
     except Exception:
         pass
 

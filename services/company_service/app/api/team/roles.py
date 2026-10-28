@@ -73,9 +73,9 @@ CORE_COMPANY_ROLES: List[Dict[str, Any]] = [
 def normalize_role_code(role_input: Optional[str]) -> str:
     """Normalize any display name or code into canonical role identifier."""
     if not role_input:
-        return "recruiter"
+        return "company_admin"
     clean = role_input.lower().replace(" ", "_").replace("/", "").strip()
-    if clean in ["company_admin", "admin", "owner", "superadmin"]:
+    if clean in ["company_admin", "admin", "owner", "superadmin", "company"]:
         return "company_admin"
     if clean in ["hr__recruiter", "hr_recruiter", "recruiter", "hr"]:
         return "recruiter"
@@ -167,8 +167,10 @@ def require_company_permission(permission_key: str):
         if getattr(user, "is_superuser", False):
             return user
 
-        user_role = getattr(user, "role", None) or getattr(user, "user_type", None)
+        user_role = getattr(user, "role", None) or getattr(user, "user_type", None) or getattr(user, "role_type", None)
         company_id = getattr(user, "company_id", None)
+        if not company_id and hasattr(user, "company_profile") and user.company_profile:
+            company_id = user.company_profile.id
 
         if not has_permission(user_role, permission_key, company_id, db):
             raise HTTPException(

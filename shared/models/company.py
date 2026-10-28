@@ -32,6 +32,9 @@ class CompanyProfile(Base, TimestampMixin):
     subscription_tier = Column(String(50), default="Freemium", nullable=True)
     settings = Column(Text, nullable=True)  # JSON-encoded tenant settings
 
+    tagline = Column(String(255), nullable=True)
+    is_public = Column(Boolean, default=True, nullable=False)
+
     # Moderation & Verification by Super Admin
     verification_status = Column(String(50), default="pending", nullable=False, index=True)  # pending, verified, rejected
     verification_notes = Column(Text, nullable=True)

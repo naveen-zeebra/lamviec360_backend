@@ -11,13 +11,14 @@ from shared.database.session import get_db
 from shared.models import User
 from shared.schemas import PaginatedResponse, APIResponse
 from shared.utils import require_roles, success_response, paginated_response
-from .schemas import CompanyVerifySchema, UpdateCompanyPlanSchema
+from .schemas import CompanyVerifySchema, UpdateCompanyPlanSchema, CompanyAdminUpdateSchema
 from .controller import (
     list_companies_controller,
     get_company_detail_controller,
     verify_company_controller,
     toggle_feature_company_controller,
     update_company_plan_controller,
+    update_company_details_controller,
 )
 
 router = APIRouter(prefix="/companies", tags=["Admin Company Verification"])
@@ -123,3 +124,26 @@ def update_company_plan(
         data=res,
         message=f"Company plan updated to {data.plan_id}",
     )
+
+
+@router.put("/{company_id}", response_model=APIResponse[dict])
+def update_company_details(
+    company_id: int,
+    data: CompanyAdminUpdateSchema,
+    request: Request,
+    current_admin: User = Depends(require_roles("super_admin", "admin")),
+    db: Session = Depends(get_db),
+):
+    """Directly update company profile, registration, and status details."""
+    res = update_company_details_controller(
+        db=db,
+        company_id=company_id,
+        data=data,
+        current_admin=current_admin,
+        request=request,
+    )
+    return success_response(
+        data=res,
+        message="Company details updated successfully",
+    )
+

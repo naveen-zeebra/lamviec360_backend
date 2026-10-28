@@ -95,6 +95,20 @@ def serialize_job(j: JobPosting) -> Dict[str, Any]:
         "vacancies": getattr(j, "vacancies", None) if getattr(j, "vacancies", None) is not None else 1,
         "education": getattr(j, "education", None) or "Bachelor's Degree",
         "documents": docs,
+        "salary_type": getattr(j, "salary_type", None) or "Gross",
+        "salaryType": getattr(j, "salary_type", None) or "Gross",
+        "attitude_type": getattr(j, "attitude_type", None) or "",
+        "attitudeType": getattr(j, "attitude_type", None) or "",
+        "social_type": getattr(j, "social_type", None) or "",
+        "socialType": getattr(j, "social_type", None) or "",
+        "personality_type": getattr(j, "personality_type", None) or "",
+        "personalityType": getattr(j, "personality_type", None) or "",
+        "overtime_willingness": getattr(j, "overtime_willingness", None) or "",
+        "overtimeWillingness": getattr(j, "overtime_willingness", None) or "",
+        "project_work_reqs": getattr(j, "project_work_reqs", None) or "",
+        "projectWorkReqs": getattr(j, "project_work_reqs", None) or "",
+        "ai_generated": bool(getattr(j, "ai_generated", False)),
+        "aiGenerated": bool(getattr(j, "ai_generated", False)),
         "status": j.status,
         "moderation_status": j.moderation_status,
         "views_count": j.views_count,
@@ -216,6 +230,13 @@ def create_job_posting(db: Session, company_id: int, data: Any) -> JobPosting:
         vacancies=vac_val,
         documents=documents_val,
         expires_at=expires_at_val,
+        salary_type=data.get("salary_type") or data.get("salaryType") or "Gross",
+        attitude_type=data.get("attitude_type") or data.get("attitudeType"),
+        social_type=data.get("social_type") or data.get("socialType"),
+        personality_type=data.get("personality_type") or data.get("personalityType"),
+        overtime_willingness=data.get("overtime_willingness") or data.get("overtimeWillingness"),
+        project_work_reqs=data.get("project_work_reqs") or data.get("projectWorkReqs"),
+        ai_generated=bool(data.get("ai_generated") or data.get("aiGenerated")),
         status=init_status,
         moderation_status="approved",
     )
@@ -322,6 +343,21 @@ def update_job_posting(db: Session, job: JobPosting, data: Any) -> JobPosting:
         raw_status = data["status"].lower()
         job.status = "published" if raw_status in ("active", "published") else raw_status
 
+    if "salary_type" in data or "salaryType" in data:
+        job.salary_type = data.get("salary_type") or data.get("salaryType")
+    if "attitude_type" in data or "attitudeType" in data:
+        job.attitude_type = data.get("attitude_type") or data.get("attitudeType")
+    if "social_type" in data or "socialType" in data:
+        job.social_type = data.get("social_type") or data.get("socialType")
+    if "personality_type" in data or "personalityType" in data:
+        job.personality_type = data.get("personality_type") or data.get("personalityType")
+    if "overtime_willingness" in data or "overtimeWillingness" in data:
+        job.overtime_willingness = data.get("overtime_willingness") or data.get("overtimeWillingness")
+    if "project_work_reqs" in data or "projectWorkReqs" in data:
+        job.project_work_reqs = data.get("project_work_reqs") or data.get("projectWorkReqs")
+    if "ai_generated" in data or "aiGenerated" in data:
+        job.ai_generated = bool(data.get("ai_generated") or data.get("aiGenerated"))
+
     db.commit()
     db.refresh(job)
     logger.info(f"Updated job posting id={job.id}")
@@ -364,6 +400,13 @@ def duplicate_job(db: Session, company_id: int, source_job: JobPosting) -> JobPo
         education=source_job.education,
         documents=source_job.documents,
         expires_at=source_job.expires_at,
+        salary_type=source_job.salary_type,
+        attitude_type=source_job.attitude_type,
+        social_type=source_job.social_type,
+        personality_type=source_job.personality_type,
+        overtime_willingness=source_job.overtime_willingness,
+        project_work_reqs=source_job.project_work_reqs,
+        ai_generated=source_job.ai_generated,
         status="draft",
         moderation_status="approved",
     )

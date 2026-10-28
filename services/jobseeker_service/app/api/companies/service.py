@@ -1,0 +1,226 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# File    : services/jobseeker_service/app/api/companies/service.py
+# Purpose : Domain & data retrieval for public Company Discovery & Showcase
+# ─────────────────────────────────────────────────────────────────────────────
+
+import json
+from typing import Optional, List, Dict, Any, Tuple
+from sqlalchemy.orm import Session
+from sqlalchemy import or_, desc
+
+from shared.models import CompanyProfile, JobPosting
+from shared.utils.error_handler import service_error_handler
+from shared.utils.logger import get_logger
+
+logger = get_logger("jobseeker_companies_service")
+
+
+def parse_json_safely(raw: Any) -> Dict[str, Any]:
+    if not raw:
+        return {}
+    if isinstance(raw, dict):
+        return raw
+    try:
+        return json.loads(raw)
+    except Exception:
+        return {}
+
+
+def serialize_public_company_summary(c: CompanyProfile, live_jobs_count: int) -> Dict[str, Any]:
+    return {
+        "id": c.id,
+        "name": c.company_name,
+        "company_name": c.company_name,
+        "legal_name": c.legal_name,
+        "logo_url": c.logo_url,
+        "cover_image_url": c.cover_image_url,
+        "tagline": getattr(c, "tagline", "") or "",
+        "industry": c.industry or "Technology",
+        "company_size": c.company_size or "11–50 employees",
+        "city": c.city or "Vietnam",
+        "country": c.country or "Vietnam",
+        "website": c.website,
+        "verified": c.verification_status == "verified",
+        "is_featured": bool(c.is_featured),
+        "open_jobs_count": live_jobs_count,
+        "about": c.about or "",
+    }
+
+
+def serialize_public_job(j: JobPosting, c: CompanyProfile) -> Dict[str, Any]:
+    sal = "Negotiable"
+    if j.salary_min and j.salary_max:
+        if (j.salary_currency or "VND") == "VND":
+            sal = f"{round(j.salary_min / 1_000_000)}M – {round(j.salary_max / 1_000_000)}M VND"
+        else:
+            sal = f"{int(j.salary_min):,} – {int(j.salary_max):,} {j.salary_currency}"
+    elif j.salary_min:
+        sal = f"From {int(j.salary_min):,} {j.salary_currency or 'VND'}"
+
+    skills_list = []
+    if getattr(j, "skills", None):
+        if isinstance(j.skills, list):
+            skills_list = j.skills
+        elif isinstance(j.skills, str):
+            skills_list = [s.strip() for s in j.skills.split(",") if s.strip()]
+
+    return {
+        "id": j.id,
+        "title": j.title,
+        "company": c.company_name,
+        "company_name": c.company_name,
+        "company_id": c.id,
+        "company_logo": c.logo_url,
+        "department": getattr(j, "department", "") or j.industry or "Engineering",
+        "location": j.location or (f"{j.city}, {j.country}" if j.city else c.city or "Vietnam"),
+        "city": j.city or c.city or "Vietnam",
+        "job_type": j.job_type or "Full-time",
+        "type": j.job_type or "Full-time",
+        "workplace_type": j.workplace_type or "On-site",
+        "mode": j.workplace_type or "On-site",
+        "experience_level": j.experience_level or "Mid-level",
+        "salary": sal,
+        "salary_min": j.salary_min,
+        "salary_max": j.salary_max,
+        "salary_currency": j.salary_currency or "VND",
+        "skills": skills_list,
+        "posted": j.created_at.strftime("%Y-%m-%d") if j.created_at else "Recently",
+        "deadline": j.expires_at.strftime("%Y-%m-%d") if getattr(j, "expires_at", None) else None,
+        "description": j.description or "",
+    }
+
+
+@service_error_handler
+def list_public_companies(
+    db: Session,
+    search: Optional[str] = None,
+    industry: Optional[str] = None,
+    city: Optional[str] = None,
+    verified_only: bool = False,
+    featured_only: bool = False,
+    page: int = 1,
+    page_size: int = 12,
+) -> Tuple[List[Dict[str, Any]], int]:
+    query = db.query(CompanyProfile)
+
+    # Only show public profiles
+    query = query.filter(or_(CompanyProfile.is_public == True, CompanyProfile.is_public.is_(None)))
+
+    if verified_only:
+        query = query.filter(CompanyProfile.verification_status == "verified")
+
+    if featured_only:
+        query = query.filter(CompanyProfile.is_featured == True)
+
+    if industry and industry.lower() != "all":
+        query = query.filter(CompanyProfile.industry.ilike(f"%{industry.strip()}%"))
+
+    if city and city.lower() != "all":
+        query = query.filter(CompanyProfile.city.ilike(f"%{city.strip()}%"))
+
+    if search:
+        s = f"%{search.strip()}%"
+        query = query.filter(
+            or_(
+                CompanyProfile.company_name.ilike(s),
+                CompanyProfile.legal_name.ilike(s),
+                CompanyProfile.about.ilike(s),
+                getattr(CompanyProfile, "tagline", CompanyProfile.company_name).ilike(s),
+            )
+        )
+
+    total_items = query.count()
+    offset = (page - 1) * page_size
+    companies = (
+        query.order_by(
+            desc(CompanyProfile.is_featured),
+            desc(CompanyProfile.created_at),
+        )
+        .offset(offset)
+        .limit(page_size)
+        .all()
+    )
+
+    items = []
+    for c in companies:
+        live_jobs = [
+            j
+            for j in (c.job_postings or [])
+            if j.status in ("published", "active")
+            and not getattr(j, "is_deleted", False)
+            and getattr(j, "moderation_status", "approved") == "approved"
+        ]
+        items.append(serialize_public_company_summary(c, len(live_jobs)))
+
+    return items, total_items
+
+
+@service_error_handler
+def get_public_company_by_id_or_slug(
+    db: Session,
+    id_or_slug: str,
+) -> Optional[Dict[str, Any]]:
+    c = None
+    if id_or_slug.isdigit():
+        c = db.query(CompanyProfile).filter(CompanyProfile.id == int(id_or_slug)).first()
+
+    if not c:
+        c = db.query(CompanyProfile).filter(CompanyProfile.company_name.ilike(id_or_slug)).first()
+
+    if not c:
+        return None
+
+    # Parse tenant settings for culture and workplace config
+    settings = parse_json_safely(c.settings)
+    culture_values = settings.get("culture_values") or [
+        {"title": "Innovation & Impact", "description": "We build scalable, mission-critical digital products that solve real problems.", "icon": "zap"},
+        {"title": "People & Growth", "description": "Continuous career mentorship, learning allowances, and an inclusive merit-based culture.", "icon": "users"},
+        {"title": "Integrity & Excellence", "description": "Transparent communication, high engineering standards, and shared ownership.", "icon": "shield"},
+    ]
+    workplace_model = settings.get("workplace_model") or "Hybrid (Flexible remote work options)"
+    working_hours = settings.get("working_hours") or "Monday – Friday (9:00 AM – 6:00 PM)"
+
+    # Filter live jobs
+    live_jobs = [
+        serialize_public_job(j, c)
+        for j in (c.job_postings or [])
+        if j.status in ("published", "active")
+        and not getattr(j, "is_deleted", False)
+        and getattr(j, "moderation_status", "approved") == "approved"
+    ]
+
+    is_pub = getattr(c, "is_public", True)
+    if is_pub is None:
+        is_pub = True
+
+    return {
+        "id": c.id,
+        "name": c.company_name,
+        "company_name": c.company_name,
+        "legal_name": c.legal_name,
+        "logo_url": c.logo_url,
+        "cover_image_url": c.cover_image_url,
+        "tagline": getattr(c, "tagline", "") or "",
+        "industry": c.industry or "Technology",
+        "company_size": c.company_size or "11–50 employees",
+        "city": c.city or "Vietnam",
+        "country": c.country or "Vietnam",
+        "address": c.address or f"{c.city or 'Vietnam'}",
+        "website": c.website,
+        "contact_email": c.contact_email or (c.user.email if c.user else None),
+        "contact_phone": c.contact_phone,
+        "contact_person": c.contact_person,
+        "founded_year": c.founded_year,
+        "linkedin_url": c.linkedin_url,
+        "facebook_url": c.facebook_url,
+        "about": c.about or "",
+        "benefits": c.benefits or "",
+        "verified": c.verification_status == "verified",
+        "is_featured": bool(c.is_featured),
+        "is_public": is_pub,
+        "workplace_model": workplace_model,
+        "working_hours": working_hours,
+        "culture_values": culture_values,
+        "open_jobs": live_jobs,
+        "open_jobs_count": len(live_jobs),
+    }

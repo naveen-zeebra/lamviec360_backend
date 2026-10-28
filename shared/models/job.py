@@ -40,6 +40,16 @@ class JobPosting(Base, TimestampMixin, SoftDeleteMixin):
     vacancies = Column(Integer, default=1, nullable=True)
     education = Column(String(100), nullable=True)
     documents = Column(Text, nullable=True)  # JSON-encoded array or comma-separated document names
+    salary_type = Column(String(20), default="Gross", nullable=True)
+
+    # EMP-FR-009 Selection Criteria & AI Flag
+    attitude_type = Column(String(255), nullable=True)
+    social_type = Column(String(255), nullable=True)
+    personality_type = Column(String(255), nullable=True)
+    overtime_willingness = Column(String(255), nullable=True)
+    project_work_reqs = Column(Text, nullable=True)
+    selection_criteria = Column(Text, nullable=True)
+    ai_generated = Column(Boolean, default=False, nullable=True)
 
     # Relationships
     company = relationship("CompanyProfile", back_populates="job_postings")

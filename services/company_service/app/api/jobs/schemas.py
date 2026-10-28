@@ -32,6 +32,18 @@ class CompanyJobCreateRequest(BaseModel):
     documents: Optional[Any] = None
     status: Optional[str] = "published"
     ai_generated: Optional[bool] = False
+    salary_type: Optional[str] = "Gross"
+    salaryType: Optional[str] = None
+    attitude_type: Optional[str] = None
+    attitudeType: Optional[str] = None
+    social_type: Optional[str] = None
+    socialType: Optional[str] = None
+    personality_type: Optional[str] = None
+    personalityType: Optional[str] = None
+    overtime_willingness: Optional[str] = None
+    overtimeWillingness: Optional[str] = None
+    project_work_reqs: Optional[str] = None
+    projectWorkReqs: Optional[str] = None
 
 
 class CompanyJobUpdateRequest(BaseModel):
@@ -64,3 +76,15 @@ class CompanyJobUpdateRequest(BaseModel):
     documents: Optional[Any] = None
     status: Optional[str] = None
     ai_generated: Optional[bool] = None
+    salary_type: Optional[str] = None
+    salaryType: Optional[str] = None
+    attitude_type: Optional[str] = None
+    attitudeType: Optional[str] = None
+    social_type: Optional[str] = None
+    socialType: Optional[str] = None
+    personality_type: Optional[str] = None
+    personalityType: Optional[str] = None
+    overtime_willingness: Optional[str] = None
+    overtimeWillingness: Optional[str] = None
+    project_work_reqs: Optional[str] = None
+    projectWorkReqs: Optional[str] = None

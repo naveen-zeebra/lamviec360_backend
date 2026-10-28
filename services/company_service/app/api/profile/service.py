@@ -55,8 +55,11 @@ def serialize_company_profile(profile: CompanyProfile, user: User) -> Dict[str, 
         "facebook_url": profile.facebook_url or "",
         "benefits": profile.benefits or "",
         "logo_url": profile.logo_url,
-        "logo": profile.logo_url,
-        "cover_image_url": profile.cover_image_url,
+        "tagline": getattr(profile, "tagline", "") or "",
+        "is_public": getattr(profile, "is_public", True) if getattr(profile, "is_public", True) is not None else True,
+        "isPublic": getattr(profile, "is_public", True) if getattr(profile, "is_public", True) is not None else True,
+        "cover_image_url": profile.cover_image_url or "",
+        "coverImage": profile.cover_image_url or "",
         "website": profile.website,
         "industry": profile.industry,
         "company_size": profile.company_size,
@@ -140,8 +143,17 @@ def update_company_profile_fields(
 
     if "legal_name" in data_dict:
         profile.legal_name = data_dict["legal_name"]
-    if "cover_image_url" in data_dict:
-        profile.cover_image_url = data_dict["cover_image_url"]
+    cover_img = data_dict.get("cover_image_url") or data_dict.get("coverImage")
+    if cover_img is not None:
+        profile.cover_image_url = cover_img
+    if "tagline" in data_dict:
+        profile.tagline = data_dict["tagline"]
+    is_pub = data_dict.get("is_public") if "is_public" in data_dict else data_dict.get("isPublic")
+    if is_pub is not None:
+        profile.is_public = bool(is_pub)
+    is_feat = data_dict.get("is_featured") if "is_featured" in data_dict else data_dict.get("featuredOnHomepage")
+    if is_feat is not None and hasattr(profile, "is_featured"):
+        profile.is_featured = bool(is_feat)
     if "website" in data_dict:
         profile.website = data_dict["website"]
     if "industry" in data_dict:

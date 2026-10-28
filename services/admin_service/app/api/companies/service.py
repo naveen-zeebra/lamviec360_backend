@@ -119,10 +119,13 @@ def serialize_company_detail(c: CompanyProfile) -> Dict[str, Any]:
         "legal_name": c.legal_name,
         "logo_url": c.logo_url,
         "cover_image_url": c.cover_image_url,
+        "tagline": getattr(c, "tagline", "") or "",
+        "is_public": getattr(c, "is_public", True) if getattr(c, "is_public", True) is not None else True,
         "website": c.website,
         "industry": c.industry,
         "company_size": c.company_size,
         "about": c.about,
+        "benefits": c.benefits or "",
         "address": c.address,
         "city": c.city,
         "country": c.country,
@@ -199,3 +202,79 @@ def toggle_company_feature_status(db: Session, company: CompanyProfile) -> bool:
     db.refresh(company)
     logger.info(f"Toggled featured status on company id={company.id} -> {company.is_featured}")
     return company.is_featured
+
+
+@service_error_handler
+def update_company_details(
+    db: Session,
+    company: CompanyProfile,
+    data_dict: Dict[str, Any],
+) -> CompanyProfile:
+    """Update company details from super admin."""
+    name = data_dict.get("company_name") or data_dict.get("name")
+    if name is not None:
+        company.company_name = name
+
+    if "legal_name" in data_dict:
+        company.legal_name = data_dict["legal_name"]
+
+    tax = data_dict.get("tax_code") or data_dict.get("reg_number") or data_dict.get("regNumber")
+    if tax is not None:
+        company.tax_code = tax
+
+    if "industry" in data_dict:
+        company.industry = data_dict["industry"]
+
+    size = data_dict.get("company_size") or data_dict.get("size")
+    if size is not None:
+        company.company_size = size
+
+    if "website" in data_dict:
+        company.website = data_dict["website"]
+
+    if "address" in data_dict:
+        company.address = data_dict["address"]
+
+    if "city" in data_dict:
+        company.city = data_dict["city"]
+
+    if "country" in data_dict:
+        company.country = data_dict["country"]
+
+    abt = data_dict.get("about") or data_dict.get("description")
+    if abt is not None:
+        company.about = abt
+
+    if "tagline" in data_dict:
+        company.tagline = data_dict["tagline"]
+
+    if "benefits" in data_dict:
+        company.benefits = data_dict["benefits"]
+
+    admin_person = data_dict.get("contact_person") or data_dict.get("adminName")
+    if admin_person is not None:
+        company.contact_person = admin_person
+
+    admin_mail = data_dict.get("contact_email") or data_dict.get("adminEmail")
+    if admin_mail is not None:
+        company.contact_email = admin_mail
+
+    admin_ph = data_dict.get("contact_phone") or data_dict.get("adminPhone")
+    if admin_ph is not None:
+        company.contact_phone = admin_ph
+
+    if "is_featured" in data_dict and data_dict["is_featured"] is not None:
+        company.is_featured = bool(data_dict["is_featured"])
+
+    is_pub = data_dict.get("is_public") if "is_public" in data_dict else data_dict.get("isPublic")
+    if is_pub is not None:
+        company.is_public = bool(is_pub)
+
+    if "verification_status" in data_dict and data_dict["verification_status"]:
+        company.verification_status = data_dict["verification_status"]
+
+    db.commit()
+    db.refresh(company)
+    logger.info(f"Super Admin updated company id={company.id} name='{company.company_name}'")
+    return company
+

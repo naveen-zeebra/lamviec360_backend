@@ -149,3 +149,35 @@ def update_company_plan_controller(
     )
 
     return {"id": c.id, "plan_id": data.plan_id}
+
+
+def update_company_details_controller(
+    db: Session,
+    company_id: int,
+    data: Any,
+    current_admin: User,
+    request: Optional[Request] = None,
+) -> Dict[str, Any]:
+    """Super Admin direct editing of company master details."""
+    c = get_company_by_id(db, company_id)
+    if not c:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Company with ID {company_id} not found",
+        )
+
+    data_dict = data.model_dump(exclude_unset=True) if hasattr(data, "model_dump") else (data.dict(exclude_unset=True) if hasattr(data, "dict") else dict(data))
+    updated = service.update_company_details(db, c, data_dict)
+
+    log_audit_event(
+        db,
+        action="UPDATE_COMPANY_DETAILS",
+        module="ADMIN_COMPANIES",
+        description=f"Admin {current_admin.email} updated details for company '{updated.company_name}' (ID={updated.id})",
+        user_id=current_admin.id,
+        user_email=current_admin.email,
+        user_type=current_admin.user_type,
+        request=request,
+    )
+
+    return serialize_company_detail(updated)

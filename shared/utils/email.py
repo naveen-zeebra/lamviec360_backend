@@ -474,3 +474,134 @@ LàmViệc360 Verification Team
 """
     return send_email(to_email=to_email, subject=subject, html_content=html_content, text_content=text_content)
 
+
+
+def send_team_invitation_email(
+    to_email: str,
+    company_name: str,
+    inviter_name: str,
+    role_name: str,
+    activation_url: str,
+    expiry_date_str: str,
+    company_logo_url: Optional[str] = None,
+    custom_message: Optional[str] = None,
+    support_email: Optional[str] = "support@lamviec360.vn",
+) -> bool:
+    """Dispatches a professional, responsive workspace invitation email to a newly invited team member."""
+    subject = f"You're invited to join {company_name} on LàmViệc360 as {role_name}"
+
+    custom_msg_html = ""
+    if custom_message and custom_message.strip():
+        custom_msg_html = f"""
+        <div style="background: #f1f5f9; border-left: 4px solid #3b82f6; border-radius: 6px; padding: 14px 18px; margin: 20px 0; font-size: 14px; color: #334155; font-style: italic;">
+          "{custom_message.strip()}"
+          <div style="font-size: 12px; font-weight: 600; color: #64748b; margin-top: 6px; font-style: normal;">— {inviter_name}</div>
+        </div>
+        """
+
+    logo_html = '<div style="font-size: 22px; font-weight: 800; color: #3b82f6; letter-spacing: -0.5px;">LàmViệc360</div>'
+    if company_logo_url:
+        logo_html = f'<div style="display: flex; align-items: center; justify-content: center; gap: 12px;"><img src="{company_logo_url}" alt="{company_name}" style="height: 36px; border-radius: 6px; object-fit: contain;" onerror="this.style.display=\'none\'" /><span style="font-size: 20px; font-weight: 800; color: #ffffff;">{company_name}</span></div>'
+
+    html_content = f"""<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 24px; color: #1e293b; }}
+    .container {{ max-width: 580px; margin: 0 auto; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }}
+    .header {{ background: #0f172a; padding: 28px 32px; text-align: center; }}
+    .body {{ padding: 32px; }}
+    .badge {{ display: inline-flex; align-items: center; gap: 6px; background: #eff6ff; border: 1px solid #bfdbfe; color: #1d4ed8; font-size: 13px; font-weight: 700; padding: 6px 14px; border-radius: 9999px; margin-bottom: 16px; }}
+    .greeting {{ font-size: 20px; font-weight: 700; margin-bottom: 12px; color: #0f172a; }}
+    .cta-box {{ text-align: center; margin: 30px 0; }}
+    .cta-btn {{ display: inline-block; background-color: #2563eb; color: #ffffff !important; font-size: 15px; font-weight: 700; text-decoration: none; padding: 14px 32px; border-radius: 8px; box-shadow: 0 2px 4px rgba(37,99,235,0.2); }}
+    .alert-box {{ background: #fffbeb; border: 1px solid #fef3c7; border-left: 4px solid #f59e0b; border-radius: 6px; padding: 12px 16px; margin: 20px 0; font-size: 13px; color: #92400e; }}
+    .steps-box {{ background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 18px 20px; margin: 24px 0; }}
+    .step-item {{ display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px; font-size: 13px; color: #475569; }}
+    .step-num {{ background: #2563eb; color: #ffffff; font-size: 11px; font-weight: 700; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }}
+    .footer {{ padding: 24px 32px; background: #f8fafc; border-top: 1px solid #e2e8f0; font-size: 12px; color: #94a3b8; text-align: center; line-height: 1.6; }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      {logo_html}
+    </div>
+    <div class="body">
+      <div class="badge">&#128101; Workspace Team Invitation</div>
+      <div class="greeting">Hello,</div>
+      <p style="color: #475569; font-size: 15px; line-height: 1.6; margin-top: 0;">
+        <strong>{inviter_name}</strong> has invited you to collaborate in the <strong>{company_name}</strong> employer workspace on <strong>LàmViệc360</strong>.
+      </p>
+
+      <p style="color: #475569; font-size: 15px; line-height: 1.6;">
+        You have been assigned the <strong>{role_name}</strong> role, granting you access to manage hiring pipelines, job postings, and candidate applications for {company_name}.
+      </p>
+
+      {custom_msg_html}
+
+      <div class="cta-box">
+        <a href="{activation_url}" class="cta-btn" target="_blank">Accept Invitation & Join Team &rarr;</a>
+      </div>
+
+      <div class="alert-box">
+        &#9200; <strong>72-Hour Security Expiration:</strong> This invitation link is unique and will expire on <strong>{expiry_date_str}</strong>. If not activated within this period, a new invitation must be requested.
+      </div>
+
+      <div class="steps-box">
+        <div style="font-weight: 700; font-size: 13px; color: #1e293b; margin-bottom: 12px;">Quick instructions to get started:</div>
+        <div class="step-item">
+          <div class="step-num">1</div>
+          <div>Click the <strong>Accept Invitation</strong> button above to open the secure activation portal.</div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">2</div>
+          <div>Set up your password and confirm your employee account profile details.</div>
+        </div>
+        <div class="step-item" style="margin-bottom: 0;">
+          <div class="step-num">3</div>
+          <div>Sign in to your {company_name} workspace dashboard and begin collaborating with your hiring team.</div>
+        </div>
+      </div>
+
+      <p style="color: #64748b; font-size: 13px; line-height: 1.6;">
+        If the button above does not work, copy and paste this activation link directly into your browser:<br />
+        <a href="{activation_url}" style="color: #2563eb; word-break: break-all; font-size: 12px;">{activation_url}</a>
+      </p>
+    </div>
+    <div class="footer">
+      <div>Need assistance? Reach out to your workspace administrator or email <a href="mailto:{support_email}" style="color: #2563eb; text-decoration: none;">{support_email}</a>.</div>
+      <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e2e8f0; font-size: 11px; color: #94a3b8;">
+        <strong>Security Notice:</strong> If you did not expect this invitation or believe it was sent in error, you can safely ignore this email. No account will be created without your confirmation.
+      </div>
+      <div style="margin-top: 8px;">&copy; LàmViệc360 &bull; Vietnam Smart Recruitment Ecosystem</div>
+    </div>
+  </div>
+</body>
+</html>"""
+
+    text_msg = f"""Hello,
+
+{inviter_name} has invited you to collaborate in the {company_name} employer workspace on LàmViệc360 as {role_name}.
+
+{f'Note from {inviter_name}: "{custom_message.strip()}"' if custom_message and custom_message.strip() else ''}
+
+To accept this invitation and activate your account, click or open the link below:
+{activation_url}
+
+Notice: This invitation is strictly valid for 72 hours and will expire on {expiry_date_str}.
+
+Quick instructions:
+1. Open the activation link above.
+2. Set up your secure password and profile.
+3. Access your {company_name} hiring dashboard.
+
+If you did not expect this invitation, you may safely ignore this message.
+
+Support: {support_email}
+LàmViệc360 Team
+"""
+
+    return send_email(to_email=to_email, subject=subject, html_content=html_content, text_content=text_msg)
