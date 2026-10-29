@@ -9,6 +9,7 @@ from services.admin_service.app.api.jobs.router import router as jobs_router
 from services.admin_service.app.api.audit_logs.router import router as audit_logs_router
 from services.admin_service.app.api.plans.router import router as plans_router
 from services.admin_service.app.api.admin_users.router import router as admin_users_router
+from services.admin_service.app.api.master_data.router import router as master_data_router
 
 routers = [
     auth_router,
@@ -21,6 +22,7 @@ routers = [
     audit_logs_router,
     plans_router,
     admin_users_router,
+    master_data_router,
 ]
 
 def register_routes(app: FastAPI) -> None:

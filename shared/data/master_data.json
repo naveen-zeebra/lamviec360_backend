@@ -1,0 +1,39 @@
+{
+  "jobTypes": [
+    "Full-time",
+    "Part-time",
+    "Contract",
+    "Internship",
+    "Remote",
+    "Temporary"
+  ],
+  "companySizes": [
+    "1–10",
+    "11–50",
+    "51–200",
+    "201–500",
+    "500+"
+  ],
+  "industries": [
+    "Technology",
+    "Software & IT",
+    "Finance & Banking",
+    "Manufacturing",
+    "Retail & Commerce",
+    "Logistics",
+    "Hospitality",
+    "Healthcare",
+    "Education",
+    "Other"
+  ],
+  "locations": [
+    "Ho Chi Minh City",
+    "Hanoi",
+    "Da Nang",
+    "Can Tho",
+    "Hai Phong",
+    "Binh Duong",
+    "Dong Nai",
+    "Remote"
+  ]
+}
