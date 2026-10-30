@@ -47,43 +47,58 @@ def serialize_public_company_summary(c: CompanyProfile, live_jobs_count: int) ->
     }
 
 
-def serialize_public_job(j: JobPosting, c: CompanyProfile) -> Dict[str, Any]:
+def serialize_public_job(j: JobPosting, c: Optional[CompanyProfile] = None) -> Dict[str, Any]:
     sal = "Negotiable"
+    salary_type = getattr(j, "salary_type", "Gross") or "Gross"
     if j.salary_min and j.salary_max:
         if (j.salary_currency or "VND") == "VND":
-            sal = f"{round(j.salary_min / 1_000_000)}M – {round(j.salary_max / 1_000_000)}M VND"
+            sal = f"{round(j.salary_min / 1_000_000)}M – {round(j.salary_max / 1_000_000)}M VND ({salary_type})"
         else:
-            sal = f"{int(j.salary_min):,} – {int(j.salary_max):,} {j.salary_currency}"
+            sal = f"{int(j.salary_min):,} – {int(j.salary_max):,} {j.salary_currency} ({salary_type})"
     elif j.salary_min:
-        sal = f"From {int(j.salary_min):,} {j.salary_currency or 'VND'}"
+        sal = f"From {int(j.salary_min):,} {j.salary_currency or 'VND'} ({salary_type})"
 
     skills_list = []
-    if getattr(j, "skills", None):
-        if isinstance(j.skills, list):
-            skills_list = j.skills
-        elif isinstance(j.skills, str):
-            skills_list = [s.strip() for s in j.skills.split(",") if s.strip()]
+    raw_skills = getattr(j, "required_skills", None) or getattr(j, "skills", None)
+    if raw_skills:
+        if isinstance(raw_skills, list):
+            skills_list = raw_skills
+        elif isinstance(raw_skills, str):
+            skills_list = [s.strip() for s in raw_skills.split(",") if s.strip()]
+
+    comp_name = c.company_name if c else "Company"
+    comp_id = c.id if c else j.company_id
+    comp_logo = c.logo_url if c else None
+    comp_city = c.city if c else ""
+
+    loc = getattr(j, "location", None) or (
+        f"{j.city}, {j.country}" if j.city and j.country else (j.city or j.country or comp_city or "Vietnam")
+    )
+    dept = getattr(j, "department", "") or getattr(j, "industry", "") or (c.industry if c else "") or "Engineering"
 
     return {
         "id": j.id,
         "title": j.title,
-        "company": c.company_name,
-        "company_name": c.company_name,
-        "company_id": c.id,
-        "company_logo": c.logo_url,
-        "department": getattr(j, "department", "") or j.industry or "Engineering",
-        "location": j.location or (f"{j.city}, {j.country}" if j.city else c.city or "Vietnam"),
-        "city": j.city or c.city or "Vietnam",
+        "company": comp_name,
+        "company_name": comp_name,
+        "company_id": comp_id,
+        "company_logo": comp_logo,
+        "department": dept,
+        "location": loc,
+        "city": j.city or comp_city or "Vietnam",
+        "country": j.country or "Vietnam",
         "job_type": j.job_type or "Full-time",
         "type": j.job_type or "Full-time",
         "workplace_type": j.workplace_type or "On-site",
         "mode": j.workplace_type or "On-site",
         "experience_level": j.experience_level or "Mid-level",
         "salary": sal,
-        "salary_min": j.salary_min,
-        "salary_max": j.salary_max,
+        "salary_min": float(j.salary_min) if j.salary_min is not None else None,
+        "salary_max": float(j.salary_max) if j.salary_max is not None else None,
         "salary_currency": j.salary_currency or "VND",
+        "salary_type": salary_type,
         "skills": skills_list,
+        "required_skills": ", ".join(skills_list) if skills_list else "",
         "posted": j.created_at.strftime("%Y-%m-%d") if j.created_at else "Recently",
         "deadline": j.expires_at.strftime("%Y-%m-%d") if getattr(j, "expires_at", None) else None,
         "description": j.description or "",
@@ -161,11 +176,15 @@ def get_public_company_by_id_or_slug(
     id_or_slug: str,
 ) -> Optional[Dict[str, Any]]:
     c = None
-    if id_or_slug.isdigit():
-        c = db.query(CompanyProfile).filter(CompanyProfile.id == int(id_or_slug)).first()
+    target = str(id_or_slug).strip()
+    if target.isdigit():
+        c = db.query(CompanyProfile).filter(CompanyProfile.id == int(target)).first()
 
     if not c:
-        c = db.query(CompanyProfile).filter(CompanyProfile.company_name.ilike(id_or_slug)).first()
+        c = db.query(CompanyProfile).filter(CompanyProfile.company_name.ilike(target)).first()
+
+    if not c and "-" in target:
+        c = db.query(CompanyProfile).filter(CompanyProfile.company_name.ilike(target.replace("-", " "))).first()
 
     if not c:
         return None
