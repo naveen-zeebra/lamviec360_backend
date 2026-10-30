@@ -53,6 +53,16 @@ class VerifyOtpRequest(BaseModel):
     code: str
 
 
+class ResendOtpRequest(BaseModel):
+    session_token: Optional[str] = None
+    email: Optional[EmailStr] = None
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, v: Optional[str]) -> Optional[str]:
+        return v.strip().lower() if v else None
+
+
 class SendVerificationEmailRequest(BaseModel):
     email: Optional[EmailStr] = None
 
@@ -129,5 +139,3 @@ class VerifyResetOtpRequest(BaseModel):
     @classmethod
     def normalize_email(cls, v: str) -> str:
         return v.strip().lower()
-
-

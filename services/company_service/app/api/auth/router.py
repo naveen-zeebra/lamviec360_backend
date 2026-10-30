@@ -23,6 +23,7 @@ from .schemas import (
     CompanyLoginRequest,
     LoginInitiateRequest,
     VerifyOtpRequest,
+    ResendOtpRequest,
     SendVerificationEmailRequest,
     VerifyEmailRequest,
     ActivateInviteRequest,
@@ -38,6 +39,7 @@ from .controller import (
     login_company_controller,
     initiate_otp_login_controller,
     verify_otp_login_controller,
+    resend_otp_login_controller,
     send_verification_email_controller,
     verify_email_controller,
     get_invite_controller,
@@ -83,6 +85,12 @@ def verify_otp_login(req: VerifyOtpRequest, request: Request, db: Session = Depe
         data=verify_otp_login_controller(req, request, db),
         message="OTP verified successfully",
     )
+
+
+@router.post("/login/resend-otp", response_model=APIResponse[dict], summary="Resend 2FA/OTP Login Code")
+def resend_otp_login(req: ResendOtpRequest, db: Session = Depends(get_db)):
+    data = resend_otp_login_controller(req, db)
+    return success_response(data=data, message=data.get("message", "A new 2FA code has been sent"))
 
 
 @router.post("/send-verification-email", response_model=APIResponse[dict], summary="Send Verification Email")

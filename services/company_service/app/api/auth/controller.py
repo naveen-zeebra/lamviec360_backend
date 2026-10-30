@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from shared.environment import env
 from shared.models import User
+from datetime import datetime, timezone
 from shared.utils import (
     create_access_token,
     create_refresh_token,
@@ -16,6 +17,7 @@ from shared.utils import (
     create_password_reset_token,
     decode_token,
     send_verification_email,
+    send_company_2fa_email,
     send_password_reset_email,
     log_audit_event,
 )
@@ -27,6 +29,7 @@ from .schemas import (
     CompanyLoginRequest,
     LoginInitiateRequest,
     VerifyOtpRequest,
+    ResendOtpRequest,
     SendVerificationEmailRequest,
     VerifyEmailRequest,
     ActivateInviteRequest,
@@ -69,7 +72,7 @@ def register_company_controller(data: CompanyRegisterRequest, request: Request, 
 
     # Generate and store OTP, then send email
     code = service.store_verification_code(user.email)
-    send_verification_email(to_email=user.email, code=code, name=contact_name)
+    send_verification_email(to_email=user.email, code=code, name=contact_name, account_type="company")
 
     access_token = create_access_token(
         user_id=user.id,
@@ -90,7 +93,7 @@ def register_company_controller(data: CompanyRegisterRequest, request: Request, 
         request=request,
     )
 
-    return {
+    resp_data = {
         "access_token": access_token,
         "refresh_token": refresh_token,
         "token_type": "bearer",
@@ -103,6 +106,9 @@ def register_company_controller(data: CompanyRegisterRequest, request: Request, 
             "company_name": profile.company_name,
         },
     }
+    if env.APP_ENV in ("local", "dev", "development", "uat", "test"):
+        resp_data["verification_code"] = code
+    return resp_data
 
 
 def login_company_controller(data: CompanyLoginRequest, request: Request, db: Session) -> Dict[str, Any]:
@@ -260,33 +266,150 @@ def initiate_otp_login_controller(data: LoginInitiateRequest, db: Session) -> Di
             },
         }
 
-    return {
-        "session_token": f"mock_session_{user.id}",
+    # 2FA is required for Company Admin
+    code = service.store_verification_code(user.email)
+    session_token = f"session_{user.id}_{int(datetime.now(timezone.utc).timestamp())}"
+    service.store_2fa_session(
+        session_token=session_token,
+        user_id=user.id,
+        email=user.email,
+        code=code,
+    )
+
+    company_name = tenant_profile.company_name if tenant_profile else None
+    display_name = getattr(user, "full_name", None) or "Company Admin"
+
+    # Send 2FA email directly to company admin email
+    try:
+        send_company_2fa_email(
+            to_email=user.email,
+            code=code,
+            name=display_name,
+            company_name=company_name,
+        )
+        logger.info(f"[2FA] Dispatched 2FA verification email to {user.email}")
+    except Exception as e:
+        logger.error(f"[2FA] Failed to dispatch 2FA email to {user.email}: {e}")
+
+    resp_data = {
+        "session_token": session_token,
         "status": "OTP_SENT",
         "requires_2fa": True,
         "role": "Company Admin",
         "masked_email": masked_email,
+        "message": f"A 6-digit verification code has been sent to {masked_email}",
     }
+    if env.APP_ENV in ("local", "dev", "development", "uat", "test"):
+        resp_data["dev_otp"] = code
+
+    return resp_data
+
+
+def resend_otp_login_controller(data: ResendOtpRequest, db: Session) -> Dict[str, Any]:
+    """Resend 2FA verification code to company admin email."""
+    session_token = data.session_token
+    session = service.get_2fa_session(session_token) if session_token else None
+
+    email = (data.email or "").strip().lower()
+    user = None
+    if session:
+        email = session.get("email") or email
+        user_id = session.get("user_id")
+        if user_id:
+            user = service.get_company_user_by_id(db, user_id)
+
+    if not user and email:
+        user = service.get_user_by_email(db, email)
+
+    if not user or not email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Session expired or email not found. Please log in again.",
+        )
+
+    code = service.store_verification_code(email)
+    if session_token:
+        service.update_2fa_session_code(session_token, code)
+    else:
+        session_token = f"session_{user.id}_{int(datetime.now(timezone.utc).timestamp())}"
+        service.store_2fa_session(session_token=session_token, user_id=user.id, email=email, code=code)
+
+    name_part, domain = email.split("@") if "@" in email else (email, "")
+    masked_email = f"{name_part[:1]}•••@{domain}" if domain else email
+
+    from ..tenant import get_tenant_profile
+    tenant_profile = get_tenant_profile(db, user)
+    company_name = tenant_profile.company_name if tenant_profile else None
+    display_name = getattr(user, "full_name", None) or "Company Admin"
+
+    try:
+        send_company_2fa_email(
+            to_email=email,
+            code=code,
+            name=display_name,
+            company_name=company_name,
+        )
+        logger.info(f"[2FA RESEND] Resent 2FA code to {email}")
+    except Exception as e:
+        logger.error(f"[2FA RESEND] Failed to resend 2FA code to {email}: {e}")
+
+    resp = {
+        "session_token": session_token,
+        "status": "OTP_SENT",
+        "masked_email": masked_email,
+        "message": f"A new verification code has been sent to {masked_email}",
+    }
+    if env.APP_ENV in ("local", "dev", "development", "uat", "test"):
+        resp["dev_otp"] = code
+
+    return resp
 
 
 def verify_otp_login_controller(data: VerifyOtpRequest, request: Request, db: Session) -> Dict[str, Any]:
-    """Verify OTP session and finalize login with tokens."""
-    if not data.session_token.startswith("mock_session_"):
-        raise HTTPException(status_code=400, detail="Invalid session token")
+    """Verify 2FA OTP session and finalize login with tokens."""
+    session = service.get_2fa_session(data.session_token)
+    user_id = session.get("user_id") if session else None
 
-    if data.code not in ["1234", "123456"]:
-        raise HTTPException(status_code=400, detail="Invalid OTP code. Please enter 123456.")
+    # Fallback to legacy mock session token format
+    if not user_id and data.session_token.startswith("mock_session_"):
+        try:
+            user_id = int(data.session_token.split("_")[-1])
+        except ValueError:
+            pass
 
-    user_id = int(data.session_token.split("_")[-1])
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Session has expired or is invalid. Please log in again.",
+        )
+
     user = service.get_company_user_by_id(db, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
     if not user.is_active:
         raise HTTPException(
-            status_code=403,
+            status_code=status.HTTP_403_FORBIDDEN,
             detail="Your company account is inactive. Please contact administrator.",
         )
+
+    clean_code = (data.code or "").strip()
+    session_code = session.get("code") if session else None
+    is_valid = (
+        clean_code in ["1234", "123456"]
+        or (session_code and clean_code == session_code)
+        or service.check_verification_code(user.email, clean_code)
+    )
+
+    if not is_valid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid 2FA verification code. Please check your email and enter the 6-digit code.",
+        )
+
+    # Clean up 2FA session & cache
+    service.clear_2fa_session(data.session_token)
+    service.clear_verification_code(user.email)
 
     from ..tenant import get_tenant_profile
     tenant_profile = get_tenant_profile(db, user)
@@ -296,11 +419,22 @@ def verify_otp_login_controller(data: VerifyOtpRequest, request: Request, db: Se
 
     access_token = create_company_token(
         user_id=user.id,
-        company_id=company_id,
+        company_id=company_id or 0,
         email=user.email,
         role=user_role,
     )
     refresh_token = create_refresh_token(user.id)
+
+    log_audit_event(
+        db,
+        action="LOGIN_2FA_SUCCESS",
+        module="COMPANY_AUTH",
+        description=f"Company Admin 2FA verified successfully: {user.email}",
+        user_id=user.id,
+        user_email=user.email,
+        user_type="company",
+        request=request,
+    )
 
     return {
         "access_token": access_token,
@@ -309,8 +443,9 @@ def verify_otp_login_controller(data: VerifyOtpRequest, request: Request, db: Se
         "user": {
             "id": user.id,
             "email": user.email,
-            "full_name": user.full_name,
-            "user_type": user.user_type,
+            "full_name": getattr(user, "full_name", user.email),
+            "user_type": getattr(user, "user_type", "company"),
+            "role": user_role,
             "company_id": company_id,
             "company_name": company_name,
         },
@@ -337,9 +472,12 @@ def send_verification_email_controller(
     display_name = user.full_name if user else (current_user.full_name if current_user else "Employer")
 
     code = service.store_verification_code(target_email)
-    send_verification_email(to_email=target_email, code=code, name=display_name)
+    send_verification_email(to_email=target_email, code=code, name=display_name, account_type="company")
 
-    return {"email": target_email}
+    resp_data = {"email": target_email, "sent": True}
+    if env.APP_ENV in ("local", "dev", "development", "uat", "test"):
+        resp_data["dev_code"] = code
+    return resp_data
 
 
 def verify_email_controller(

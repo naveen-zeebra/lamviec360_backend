@@ -73,10 +73,30 @@ def send_email(
     return True
 
 
-def send_verification_email(to_email: str, code: str, name: Optional[str] = None) -> bool:
-    """Dispatches a 6-digit email verification OTP."""
-    display_name = name or "Candidate"
-    subject = f"{code} is your LamViec360 verification code"
+def send_verification_email(
+    to_email: str,
+    code: str,
+    name: Optional[str] = None,
+    account_type: str = "jobseeker",
+) -> bool:
+    """Dispatches a 6-digit email verification OTP for candidates or employers."""
+    is_company = account_type == "company"
+    display_name = name or ("Employer" if is_company else "Candidate")
+    
+    if is_company:
+        subject = f"{code} is your LamViec360 Employer verification code"
+        portal_header = "LamViec360 Employer Portal"
+        intro_text = (
+            "Welcome to LamViec360 Employer Portal! Please use the following 6-digit verification code "
+            "to verify your company administrator work email and complete your registration:"
+        )
+    else:
+        subject = f"{code} is your LamViec360 verification code"
+        portal_header = "LamViec360"
+        intro_text = (
+            "Welcome to LamViec360! Please use the following 6-digit verification code to verify "
+            "your email address and activate your job seeker account:"
+        )
 
     html_content = f"""<!DOCTYPE html>
 <html>
@@ -87,10 +107,11 @@ def send_verification_email(to_email: str, code: str, name: Optional[str] = None
     .container {{ max-width: 540px; margin: 0 auto; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }}
     .header {{ background: #0f172a; padding: 28px 32px; text-align: center; }}
     .logo {{ font-size: 22px; font-weight: 800; color: #3b82f6; letter-spacing: -0.5px; text-decoration: none; }}
+    .badge {{ display: inline-block; background: #1e3a8a; color: #93c5fd; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px; text-transform: uppercase; margin-top: 8px; letter-spacing: 0.5px; }}
     .body {{ padding: 32px; }}
     .greeting {{ font-size: 18px; font-weight: 700; margin-bottom: 12px; }}
     .otp-box {{ margin: 28px 0; text-align: center; }}
-    .otp-code {{ display: inline-block; font-size: 36px; font-weight: 800; letter-spacing: 8px; color: #2563eb; background: #eff6ff; border: 2px dashed #93c5fd; padding: 14px 28px; border-radius: 10px; }}
+    .otp-code {{ display: inline-block; font-size: 36px; font-weight: 800; letter-spacing: 8px; color: #2563eb; background: #eff6ff; border: 2px dashed #93c5fd; padding: 14px 28px; border-radius: 10px; font-family: monospace; }}
     .expiry {{ font-size: 13px; color: #64748b; margin-top: 10px; }}
     .footer {{ padding: 20px 32px; background: #f8fafc; border-top: 1px solid #e2e8f0; font-size: 12px; color: #94a3b8; text-align: center; }}
   </style>
@@ -99,11 +120,12 @@ def send_verification_email(to_email: str, code: str, name: Optional[str] = None
   <div class="container">
     <div class="header">
       <div class="logo">LamViec360</div>
+      {'<div><span class="badge">Employer Portal</span></div>' if is_company else ''}
     </div>
     <div class="body">
       <div class="greeting">Hi {display_name},</div>
       <p style="color: #475569; font-size: 15px; line-height: 1.6;">
-        Welcome to LamViec360! Please use the following 6-digit verification code to verify your email address and activate your job seeker account:
+        {intro_text}
       </p>
       <div class="otp-box">
         <div class="otp-code">{code}</div>
@@ -122,13 +144,88 @@ def send_verification_email(to_email: str, code: str, name: Optional[str] = None
 
     text_content = f"""Hi {display_name},
 
-Welcome to LamViec360! Please use the following 6-digit verification code to verify your email address:
+{intro_text}
 
 Verification Code: {code}
 
 (This verification code expires in 15 minutes)
 
 If you did not request this verification, please disregard this email.
+"""
+
+    return send_email(to_email=to_email, subject=subject, html_content=html_content, text_content=text_content)
+
+
+def send_company_2fa_email(
+    to_email: str,
+    code: str,
+    name: Optional[str] = None,
+    company_name: Optional[str] = None,
+) -> bool:
+    """Dispatches a 6-digit Two-Factor Authentication (2FA) security code to Company Admin."""
+    display_name = name or "Company Administrator"
+    company_context = f" for {company_name}" if company_name else ""
+    subject = f"{code} is your LamViec360 Company Admin 2FA verification code"
+
+    html_content = f"""<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 24px; color: #1e293b; }}
+    .container {{ max-width: 540px; margin: 0 auto; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }}
+    .header {{ background: #0f172a; padding: 28px 32px; text-align: center; }}
+    .logo {{ font-size: 22px; font-weight: 800; color: #3b82f6; letter-spacing: -0.5px; text-decoration: none; }}
+    .badge {{ display: inline-block; background: #1e3a8a; color: #93c5fd; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px; text-transform: uppercase; margin-top: 8px; letter-spacing: 0.5px; }}
+    .body {{ padding: 32px; }}
+    .greeting {{ font-size: 18px; font-weight: 700; margin-bottom: 12px; }}
+    .otp-box {{ margin: 28px 0; text-align: center; }}
+    .otp-code {{ display: inline-block; font-size: 38px; font-weight: 800; letter-spacing: 8px; color: #1d4ed8; background: #eff6ff; border: 2px dashed #93c5fd; padding: 14px 28px; border-radius: 10px; font-family: monospace; }}
+    .expiry {{ font-size: 13px; color: #64748b; margin-top: 10px; }}
+    .security-note {{ background: #fef2f2; border: 1px solid #fee2e2; border-radius: 8px; padding: 12px 16px; font-size: 13px; color: #991b1b; line-height: 1.5; margin-top: 24px; }}
+    .footer {{ padding: 20px 32px; background: #f8fafc; border-top: 1px solid #e2e8f0; font-size: 12px; color: #94a3b8; text-align: center; }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo">LamViec360</div>
+      <div><span class="badge">Employer Security &bull; 2FA</span></div>
+    </div>
+    <div class="body">
+      <div class="greeting">Hi {display_name},</div>
+      <p style="color: #475569; font-size: 15px; line-height: 1.6;">
+        A sign-in request was detected for your <strong>Company Administrator</strong> account{company_context}.
+      </p>
+      <p style="color: #475569; font-size: 15px; line-height: 1.6;">
+        Please enter the Two-Factor Authentication (2FA) verification code below to complete your login:
+      </p>
+      <div class="otp-box">
+        <div class="otp-code">{code}</div>
+        <div class="expiry">This 2FA security code expires in 15 minutes.</div>
+      </div>
+      <div class="security-note">
+        <strong>Security Notice:</strong> Never share this code with anyone. If you did not initiate this login request, please change your password immediately.
+      </div>
+    </div>
+    <div class="footer">
+      &copy; LamViec360 Employer Portal. All rights reserved.
+    </div>
+  </div>
+</body>
+</html>"""
+
+    text_content = f"""Hi {display_name},
+
+A sign-in request was detected for your Company Administrator account{company_context}.
+
+Your 2FA Login Verification Code: {code}
+
+(This 2FA security code expires in 15 minutes)
+
+Security Notice: Never share this code with anyone. If you did not initiate this login request, please change your password immediately.
+
+LamViec360 Employer Portal
 """
 
     return send_email(to_email=to_email, subject=subject, html_content=html_content, text_content=text_content)

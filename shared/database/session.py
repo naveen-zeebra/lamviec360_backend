@@ -29,7 +29,7 @@ def init_db() -> None:
     from shared.models import user, role, oauth_account, jobseeker, company, company_user, job, application, audit_log, admin_user, notification  # noqa: F401
     Base.metadata.create_all(bind=engine)
 
-    # Safe idempotent migration for BR-301-11 acknowledgment columns, BR-101-08 job_availability, and JSP-FR-012 document encryption
+    # Safe idempotent migration for schema extensions
     try:
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE job_applications ADD COLUMN IF NOT EXISTS acknowledgment_sent BOOLEAN DEFAULT FALSE;"))
@@ -44,6 +44,14 @@ def init_db() -> None:
             conn.execute(text("ALTER TABLE job_postings ADD COLUMN IF NOT EXISTS vacancies INTEGER DEFAULT 1;"))
             conn.execute(text("ALTER TABLE job_postings ADD COLUMN IF NOT EXISTS education VARCHAR(100);"))
             conn.execute(text("ALTER TABLE job_postings ADD COLUMN IF NOT EXISTS documents TEXT;"))
+            conn.execute(text("ALTER TABLE job_postings ADD COLUMN IF NOT EXISTS salary_type VARCHAR(20) DEFAULT 'Gross';"))
+            conn.execute(text("ALTER TABLE job_postings ADD COLUMN IF NOT EXISTS attitude_type VARCHAR(255);"))
+            conn.execute(text("ALTER TABLE job_postings ADD COLUMN IF NOT EXISTS social_type VARCHAR(255);"))
+            conn.execute(text("ALTER TABLE job_postings ADD COLUMN IF NOT EXISTS personality_type VARCHAR(255);"))
+            conn.execute(text("ALTER TABLE job_postings ADD COLUMN IF NOT EXISTS overtime_willingness VARCHAR(255);"))
+            conn.execute(text("ALTER TABLE job_postings ADD COLUMN IF NOT EXISTS project_work_reqs TEXT;"))
+            conn.execute(text("ALTER TABLE job_postings ADD COLUMN IF NOT EXISTS selection_criteria TEXT;"))
+            conn.execute(text("ALTER TABLE job_postings ADD COLUMN IF NOT EXISTS ai_generated BOOLEAN DEFAULT FALSE;"))
             conn.execute(text("ALTER TABLE company_profiles ALTER COLUMN logo_url TYPE TEXT;"))
             conn.execute(text("ALTER TABLE company_profiles ALTER COLUMN cover_image_url TYPE TEXT;"))
             conn.execute(text("ALTER TABLE company_profiles ALTER COLUMN about TYPE TEXT;"))
@@ -51,4 +59,3 @@ def init_db() -> None:
             conn.execute(text("ALTER TABLE company_profiles ADD COLUMN IF NOT EXISTS tagline VARCHAR(255);"))
     except Exception:
         pass
-

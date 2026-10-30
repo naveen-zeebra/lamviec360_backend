@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional, List, Union
 from pydantic import BaseModel, Field
 
 
@@ -9,9 +9,9 @@ class ApplicantStatusUpdateSchema(BaseModel):
 
 
 class BulkStageRequest(BaseModel):
-    application_ids: List[int]
+    application_ids: List[Union[int, str]]
     status: str
-    rejection_template_id: Optional[int] = None
+    rejection_template_id: Optional[Union[int, str]] = None
     rejection_note: Optional[str] = None
 
 

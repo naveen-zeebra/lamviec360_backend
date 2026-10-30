@@ -25,6 +25,7 @@ logger = get_logger("company_auth_service")
 
 # In-memory verification cache: email -> { "code": str, "expires_at": datetime }
 _VERIFICATION_CACHE: Dict[str, dict] = {}
+_2FA_SESSION_CACHE: Dict[str, dict] = {}
 
 
 def save_base64_logo(data_url: Optional[str]) -> Optional[str]:
@@ -223,6 +224,39 @@ def check_verification_code(email: str, submitted_code: str) -> bool:
 def clear_verification_code(email: str) -> None:
     """Remove OTP after successful verification."""
     _VERIFICATION_CACHE.pop(email.lower(), None)
+
+
+def store_2fa_session(session_token: str, user_id: int, email: str, code: str, expiry_minutes: int = 15) -> None:
+    """Associate session token with user ID, email, and 2FA code."""
+    _2FA_SESSION_CACHE[session_token] = {
+        "user_id": user_id,
+        "email": email.lower(),
+        "code": code,
+        "expires_at": datetime.now(timezone.utc) + timedelta(minutes=expiry_minutes),
+    }
+
+
+def get_2fa_session(session_token: str) -> Optional[Dict[str, Any]]:
+    """Retrieve 2FA session details if valid and unexpired."""
+    session = _2FA_SESSION_CACHE.get(session_token)
+    if not session:
+        return None
+    if datetime.now(timezone.utc) > session.get("expires_at"):
+        _2FA_SESSION_CACHE.pop(session_token, None)
+        return None
+    return session
+
+
+def update_2fa_session_code(session_token: str, new_code: str, expiry_minutes: int = 15) -> None:
+    """Update OTP code for an active 2FA session."""
+    if session_token in _2FA_SESSION_CACHE:
+        _2FA_SESSION_CACHE[session_token]["code"] = new_code
+        _2FA_SESSION_CACHE[session_token]["expires_at"] = datetime.now(timezone.utc) + timedelta(minutes=expiry_minutes)
+
+
+def clear_2fa_session(session_token: str) -> None:
+    """Discard 2FA session after successful authentication."""
+    _2FA_SESSION_CACHE.pop(session_token, None)
 
 
 @service_error_handler
