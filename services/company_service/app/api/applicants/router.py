@@ -19,6 +19,7 @@ from .schemas import (
 )
 from .controller import (
     list_applicants_controller,
+    export_applicants_csv_controller,
     get_stage_counts_controller,
     get_applicant_detail_controller,
     update_applicant_status_controller,
@@ -43,6 +44,36 @@ def get_applicant_stage_counts(
     return success_response(data=counts, message="Stage counts retrieved")
 
 
+@router.get("/export-csv", summary="Export Applicants as CSV")
+def export_applicants_csv(
+    job_id: Optional[int] = Query(None),
+    status_filter: Optional[str] = Query(None, alias="status"),
+    stage_filter: Optional[str] = Query(None, alias="stage"),
+    search: Optional[str] = Query(None),
+    min_score: Optional[int] = Query(None),
+    min_experience: Optional[float] = Query(None),
+    max_experience: Optional[float] = Query(None),
+    user: Any = Depends(require_company_permission("candidates.manage")),
+    db: Session = Depends(get_db),
+):
+    resolved_status = status_filter or stage_filter
+    csv_data = export_applicants_csv_controller(
+        user=user,
+        job_id=job_id,
+        status_filter=resolved_status,
+        search=search,
+        min_score=min_score,
+        min_experience=min_experience,
+        max_experience=max_experience,
+        db=db,
+    )
+    return Response(
+        content=csv_data,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=candidates_export.csv"},
+    )
+
+
 @router.get("", response_model=PaginatedResponse[dict], summary="List Applicants")
 def list_applicants(
     job_id: Optional[int] = Query(None),
@@ -50,6 +81,8 @@ def list_applicants(
     stage_filter: Optional[str] = Query(None, alias="stage"),
     search: Optional[str] = Query(None),
     min_score: Optional[int] = Query(None),
+    min_experience: Optional[float] = Query(None),
+    max_experience: Optional[float] = Query(None),
     sort_by: Optional[str] = Query("date"),
     sort_order: Optional[str] = Query("desc"),
     page: int = Query(1, ge=1),
@@ -64,6 +97,8 @@ def list_applicants(
         status_filter=resolved_status,
         search=search,
         min_score=min_score,
+        min_experience=min_experience,
+        max_experience=max_experience,
         sort_by=sort_by,
         sort_order=sort_order,
         page=page,
@@ -103,10 +138,11 @@ def update_applicant_status(
 @router.post("/bulk-stage", response_model=APIResponse[dict], summary="Bulk Update Applicant Stage")
 def bulk_update_applicant_status(
     data: BulkStageRequest,
+    request: Request,
     user: Any = Depends(require_company_permission("candidates.manage")),
     db: Session = Depends(get_db),
 ):
-    count = bulk_update_status_controller(data, user, db)
+    count = bulk_update_status_controller(data, user, db, request=request)
     return success_response(message=f"Bulk updated {count} applicants to {data.status}")
 
 
@@ -114,10 +150,11 @@ def bulk_update_applicant_status(
 def add_candidate_note(
     application_id: int,
     data: CandidateNoteRequest,
+    request: Request,
     user: Any = Depends(require_company_permission("candidates.notes")),
     db: Session = Depends(get_db),
 ):
-    add_note_controller(application_id, data, user, db)
+    add_note_controller(application_id, data, user, db, request=request)
     return success_response(message="Note added successfully")
 
 
@@ -125,10 +162,11 @@ def add_candidate_note(
 def schedule_candidate_interview(
     application_id: int,
     data: ScheduleInterviewRequest,
+    request: Request,
     user: Any = Depends(require_company_permission("candidates.manage")),
     db: Session = Depends(get_db),
 ):
-    schedule_interview_controller(application_id, data, user, db)
+    schedule_interview_controller(application_id, data, user, db, request=request)
     return success_response(message="Interview scheduled successfully")
 
 
@@ -147,10 +185,11 @@ def get_applicant_verification_documents(
 def download_applicant_verification_document(
     application_id: int,
     doc_id: int,
+    request: Request,
     user: Any = Depends(require_company_permission("candidates.documents")),
     db: Session = Depends(get_db),
 ):
-    content, row = download_applicant_verification_document_controller(application_id, doc_id, user, db)
+    content, row = download_applicant_verification_document_controller(application_id, doc_id, user, db, request=request)
     return Response(
         content=content,
         media_type=row.mime_type or "application/octet-stream",

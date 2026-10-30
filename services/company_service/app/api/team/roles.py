@@ -24,7 +24,6 @@ AVAILABLE_PERMISSIONS: List[Dict[str, str]] = [
     {"key": "team.manage", "name": "Manage Team", "module": "Team", "description": "Invite employees, assign roles, revoke/reactivate access."},
     {"key": "settings.manage", "name": "Manage Settings", "module": "Settings", "description": "Configure company profile, pipeline stages and preferences."},
     {"key": "billing.manage", "name": "Manage Billing", "module": "Billing", "description": "View and manage subscriptions, quotas and invoices."},
-    {"key": "talent.search", "name": "Talent Search", "module": "Talent", "description": "Search and discover visible Job Seeker talent profiles and initiate candidate contact (EMP-FR-030)."},
 ]
 
 # The 3 fixed core company roles per FSD-004 specification
@@ -53,7 +52,6 @@ CORE_COMPANY_ROLES: List[Dict[str, Any]] = [
             "candidates.manage",
             "candidates.notes",
             "candidates.documents",
-            "talent.search",
         ],
     },
     {

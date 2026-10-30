@@ -56,6 +56,17 @@ DEFAULT_MASTER_DATA: Dict[str, List[str]] = {
         "Dong Nai",
         "Remote",
     ],
+    "departments": [
+        "Engineering & Technology",
+        "Product & Design",
+        "Marketing & Communications",
+        "Sales & Business Development",
+        "Human Resources & Talent",
+        "Finance & Accounting",
+        "Customer Success & Operations",
+        "Legal & Compliance",
+        "Administration",
+    ],
 }
 
 CATEGORY_MAP = {
@@ -67,6 +78,8 @@ CATEGORY_MAP = {
     "industry": "industries",
     "locations": "locations",
     "location": "locations",
+    "departments": "departments",
+    "department": "departments",
 }
 
 

@@ -20,4 +20,5 @@ class MasterDataResponse(BaseModel):
     companySizes: List[str]
     industries: List[str]
     locations: List[str]
+    departments: List[str] = Field(default_factory=list)
 

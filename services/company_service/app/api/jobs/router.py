@@ -69,40 +69,44 @@ def get_company_job(
 def update_company_job(
     job_id: int,
     data: CompanyJobUpdateRequest,
+    request: Request,
     user: Any = Depends(require_company_permission("jobs.manage")),
     db: Session = Depends(get_db),
 ):
-    result = update_job_controller(job_id, data, user, db)
+    result = update_job_controller(job_id, data, user, db, request=request)
     return success_response(data=result, message="Job updated successfully")
 
 
 @router.patch("/{job_id}/status", response_model=APIResponse[dict], summary="Toggle Job Status")
 def toggle_job_status(
     job_id: int,
+    request: Request,
     status_val: str = Query(..., alias="status", pattern="^(?i)(published|draft|closed|paused|active)$"),
     user: Any = Depends(require_company_permission("jobs.manage")),
     db: Session = Depends(get_db),
 ):
-    norm_status = toggle_status_controller(job_id, status_val, user, db)
+    norm_status = toggle_status_controller(job_id, status_val, user, db, request=request)
     return success_response(message=f"Job status updated to {norm_status}")
 
 
 @router.post("/{job_id}/duplicate", response_model=APIResponse[dict], summary="Duplicate Job")
 def duplicate_company_job(
     job_id: int,
+    request: Request,
     user: Any = Depends(require_company_permission("jobs.manage")),
     db: Session = Depends(get_db),
 ):
-    result = duplicate_job_controller(job_id, user, db)
+    result = duplicate_job_controller(job_id, user, db, request=request)
     return success_response(data=result, message="Job duplicated successfully")
 
 
 @router.delete("/{job_id}", response_model=APIResponse[None], summary="Delete Job")
 def delete_company_job(
     job_id: int,
+    request: Request,
     user: Any = Depends(require_company_permission("jobs.manage")),
     db: Session = Depends(get_db),
 ):
-    delete_job_controller(job_id, user, db)
+    delete_job_controller(job_id, user, db, request=request)
     return success_response(message="Job posting deleted successfully")
 

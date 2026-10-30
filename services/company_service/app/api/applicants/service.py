@@ -151,6 +151,8 @@ def list_company_applicants(
     status_filter: Optional[str] = None,
     search: Optional[str] = None,
     min_score: Optional[int] = None,
+    min_experience: Optional[float] = None,
+    max_experience: Optional[float] = None,
     sort_by: Optional[str] = "date",
     sort_order: Optional[str] = "desc",
     page: int = 1,
@@ -193,6 +195,11 @@ def list_company_applicants(
     if min_score is not None and min_score > 0:
         min_rating = max(1, round(min_score / 20))
         query = query.filter(JobApplication.rating >= min_rating)
+
+    if min_experience is not None:
+        query = query.filter(JobSeekerProfile.experience_years >= min_experience)
+    if max_experience is not None:
+        query = query.filter(JobSeekerProfile.experience_years <= max_experience)
 
     total_items = query.count()
 
@@ -513,3 +520,65 @@ def download_applicant_verification_document(
     raw_bytes = target.read_bytes()
     decrypted_bytes = decrypt_document_data(raw_bytes)
     return decrypted_bytes, doc
+
+
+@service_error_handler
+def export_company_applicants_csv(
+    db: Session,
+    company_id: int,
+    job_id: Optional[int] = None,
+    status_filter: Optional[str] = None,
+    search: Optional[str] = None,
+    min_score: Optional[int] = None,
+    min_experience: Optional[float] = None,
+    max_experience: Optional[float] = None,
+) -> str:
+    """Export filtered applicant pool (up to 5,000 rows) as clean RFC-4180 CSV."""
+    import csv
+    import io
+
+    items, _ = list_company_applicants(
+        db=db,
+        company_id=company_id,
+        job_id=job_id,
+        status_filter=status_filter,
+        search=search,
+        min_score=min_score,
+        min_experience=min_experience,
+        max_experience=max_experience,
+        page=1,
+        page_size=5000,
+    )
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "Applicant ID",
+        "Candidate Name",
+        "Headline",
+        "Email",
+        "Phone",
+        "Job Title",
+        "Stage",
+        "AI Match Score (%)",
+        "Experience (Years)",
+        "Applied Date",
+        "Rating (1-5)",
+    ])
+
+    for it in items:
+        writer.writerow([
+            it.get("id", ""),
+            it.get("candidate_name", ""),
+            it.get("candidate_headline", ""),
+            it.get("candidate_email", ""),
+            it.get("candidate_phone", ""),
+            it.get("job_title", ""),
+            it.get("stage", ""),
+            it.get("match_score", ""),
+            it.get("candidate_experience_years", 0),
+            it.get("applied_at", ""),
+            it.get("rating", ""),
+        ])
+
+    return output.getvalue()

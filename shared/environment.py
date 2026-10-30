@@ -93,6 +93,10 @@ class EnvironmentConfig:
         _DEFAULT_JOBSEEKER_URL = "https://lamviec360.com"
         _DEFAULT_COMPANY_URL = "https://company.lamviec360.com"
         _DEFAULT_ADMIN_URL = "https://superadmin.lamviec360.com"
+    elif APP_ENV in ("uat", "staging"):
+        _DEFAULT_JOBSEEKER_URL = "https://uat.lamviec360.com"
+        _DEFAULT_COMPANY_URL = "https://company-uat.lamviec360.com"
+        _DEFAULT_ADMIN_URL = "https://admin-uat.lamviec360.com"
     elif APP_ENV in ("develop", "development", "dev"):
         _DEFAULT_JOBSEEKER_URL = "https://devjobseeker.lamviec360.com"
         _DEFAULT_COMPANY_URL = "https://devcompany.lamviec360.com"
