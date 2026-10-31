@@ -422,8 +422,7 @@ def verify_otp_login_controller(data: VerifyOtpRequest, request: Request, db: Se
     clean_code = (data.code or "").strip()
     session_code = session.get("code") if session else None
     is_valid = (
-        clean_code in ["1234", "123456"]
-        or (session_code and clean_code == session_code)
+        (session_code and clean_code == session_code)
         or service.check_verification_code(user.email, clean_code)
     )
 

@@ -209,11 +209,8 @@ def store_verification_code(email: str, code: Optional[str] = None, expiry_minut
 
 
 def check_verification_code(email: str, submitted_code: str) -> bool:
-    """Validate submitted code against cache and dev bypasses."""
+    """Validate submitted code strictly against cache."""
     code_clean = (submitted_code or "").strip()
-    if code_clean in ["123456", "1234"]:
-        return True
-
     cached = _VERIFICATION_CACHE.get(email.lower())
     now = datetime.now(timezone.utc)
     if cached and cached.get("code") == code_clean and now <= cached.get("expires_at"):
