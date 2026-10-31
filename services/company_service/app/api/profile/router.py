@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from shared.database.session import get_db
 from shared.schemas import APIResponse
 from shared.utils import get_current_company_user, success_response
+from ..team.roles import require_company_permission
 
 from .schemas import CompanyProfileUpdateSchema
 from .controller import (
@@ -31,7 +32,7 @@ def get_company_profile(
 @router.put("", response_model=APIResponse[dict], summary="Update Company Profile")
 def update_company_profile(
     data: CompanyProfileUpdateSchema,
-    user: Any = Depends(get_current_company_user),
+    user: Any = Depends(require_company_permission("settings.manage")),
     db: Session = Depends(get_db),
 ):
     return success_response(

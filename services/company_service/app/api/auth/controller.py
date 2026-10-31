@@ -139,11 +139,22 @@ def login_company_controller(data: CompanyLoginRequest, request: Request, db: Se
     user_role = getattr(user, "role", "company_admin")
 
     from shared.utils import create_company_token
+    from ..team.roles import normalize_role_code
+    canonical_code = normalize_role_code(user_role)
+    role_display_map = {
+        "company_admin": "Company Admin",
+        "recruiter": "HR / Recruiter",
+        "viewer": "Viewer",
+        "hiring_manager": "HR / Recruiter",
+        "interviewer": "HR / Recruiter",
+    }
+    role_name = role_display_map.get(canonical_code, canonical_code.replace("_", " ").title())
+
     access_token = create_company_token(
         user_id=user.id,
         company_id=company_id or 0,
         email=user.email,
-        role=user_role,
+        role=canonical_code,
     )
     refresh_token = create_refresh_token(user.id)
 
@@ -162,12 +173,16 @@ def login_company_controller(data: CompanyLoginRequest, request: Request, db: Se
         "access_token": access_token,
         "refresh_token": refresh_token,
         "token_type": "bearer",
+        "role": role_name,
+        "role_code": canonical_code,
+        "roles": [canonical_code],
         "user": {
             "id": user.id,
             "email": user.email,
-            "full_name": user.full_name,
-            "user_type": "company",
-            "role": user_role,
+            "full_name": getattr(user, "full_name", user.email),
+            "user_type": getattr(user, "user_type", "company"),
+            "role": role_name,
+            "role_code": canonical_code,
             "company_id": company_id,
             "company_name": company_name,
         },
@@ -248,19 +263,30 @@ def initiate_otp_login_controller(data: LoginInitiateRequest, db: Session) -> Di
             request=None,
         )
 
+        role_display_map = {
+            "company_admin": "Company Admin",
+            "recruiter": "HR / Recruiter",
+            "viewer": "Viewer",
+            "hiring_manager": "HR / Recruiter",
+            "interviewer": "HR / Recruiter",
+        }
+        role_name = role_display_map.get(user_role_str, user_role or "HR / Recruiter")
         return {
             "status": "DIRECT_LOGIN",
             "requires_2fa": False,
             "access_token": access_token,
             "refresh_token": refresh_token,
             "token_type": "bearer",
-            "role": user_role or "HR / Recruiter",
+            "role": role_name,
+            "role_code": user_role_str,
+            "roles": [user_role_str],
             "user": {
                 "id": user.id,
                 "email": user.email,
                 "full_name": getattr(user, "full_name", user.email),
                 "user_type": "company",
-                "role": user_role or "HR / Recruiter",
+                "role": role_name,
+                "role_code": user_role_str,
                 "company_id": company_id,
                 "company_name": company_name,
             },
@@ -436,16 +462,32 @@ def verify_otp_login_controller(data: VerifyOtpRequest, request: Request, db: Se
         request=request,
     )
 
+    role_display_map = {
+        "company_admin": "Company Admin",
+        "recruiter": "HR / Recruiter",
+        "viewer": "Viewer",
+        "hiring_manager": "HR / Recruiter",
+        "interviewer": "HR / Recruiter",
+    }
+    user_role_str = getattr(user, "role", None) or "company_admin"
+    from ..team.roles import normalize_role_code
+    canonical_code = normalize_role_code(user_role_str)
+    role_name = role_display_map.get(canonical_code, "Company Admin")
+
     return {
         "access_token": access_token,
         "refresh_token": refresh_token,
         "token_type": "bearer",
+        "role": role_name,
+        "role_code": canonical_code,
+        "roles": [canonical_code],
         "user": {
             "id": user.id,
             "email": user.email,
             "full_name": getattr(user, "full_name", user.email),
             "user_type": getattr(user, "user_type", "company"),
-            "role": user_role,
+            "role": role_name,
+            "role_code": canonical_code,
             "company_id": company_id,
             "company_name": company_name,
         },
@@ -572,21 +614,52 @@ def accept_team_invitation_controller(data: Any, db: Session) -> Dict[str, Any]:
     }
 
 
-def get_company_me_controller(user: User, db: Session) -> Dict[str, Any]:
+def get_company_me_controller(user: Any, db: Session) -> Dict[str, Any]:
     """Return profile details for currently authenticated company user."""
     from ..tenant import get_tenant_profile
     from ..team.service import load_settings
+    from shared.models.company_user import CompanyUser
+    from ..team.roles import normalize_role_code
     
     profile = get_tenant_profile(db, user)
     
-    # Check if they are a team member and what their role is
-    role_name = "Company Admin"
-    settings = load_settings(profile)
-    team_members = settings.get("team_members", [])
-    for m in team_members:
-        if m.get("email") == user.email:
-            role_name = m.get("role", "Company Admin")
-            break
+    # 1. Direct role on authenticated user object (e.g. CompanyUser instance)
+    raw_role = getattr(user, "role", None)
+
+    # 2. Check company_users table if user object is generic User
+    if not raw_role and profile:
+        user_email = getattr(user, "email", None)
+        if user_email:
+            cu = db.query(CompanyUser).filter(
+                CompanyUser.email.ilike(user_email),
+                CompanyUser.company_id == profile.id,
+                CompanyUser.is_deleted == False,
+            ).first()
+            if cu and cu.role:
+                raw_role = cu.role
+
+    # 3. Check legacy team_members settings
+    if not raw_role and profile:
+        settings = load_settings(profile)
+        team_members = settings.get("team_members", [])
+        for m in team_members:
+            if (m.get("email") or "").lower() == (getattr(user, "email", "") or "").lower():
+                raw_role = m.get("role")
+                break
+
+    # 4. Fallback: Company profile creator is company_admin, otherwise company_admin
+    if not raw_role:
+        raw_role = "company_admin"
+
+    canonical_code = normalize_role_code(raw_role)
+    role_display_map = {
+        "company_admin": "Company Admin",
+        "recruiter": "HR / Recruiter",
+        "viewer": "Viewer",
+        "hiring_manager": "HR / Recruiter",
+        "interviewer": "HR / Recruiter",
+    }
+    role_name = role_display_map.get(canonical_code, canonical_code.replace("_", " ").title())
 
     profile_data = None
     if profile:
@@ -610,15 +683,17 @@ def get_company_me_controller(user: User, db: Session) -> Dict[str, Any]:
     return {
         "id": user.id,
         "email": user.email,
-        "full_name": user.full_name,
-        "user_name": user.full_name,
+        "full_name": getattr(user, "full_name", user.email),
+        "user_name": getattr(user, "full_name", user.email),
         "user_email": user.email,
-        "phone": user.phone,
-        "user_type": user.user_type,
+        "phone": getattr(user, "phone", None),
+        "user_type": getattr(user, "user_type", "company"),
         "company_id": profile.id if profile else None,
         "company_name": profile.company_name if profile else None,
         "company_profile": profile_data,
         "role": role_name,
+        "role_code": canonical_code,
+        "roles": [canonical_code],
         "approval_status": profile.verification_status if profile else "verified",
     }
 
