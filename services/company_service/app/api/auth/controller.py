@@ -3,12 +3,14 @@
 # Purpose : Orchestration layer for Company Portal Authentication
 # ─────────────────────────────────────────────────────────────────────────────
 
+import re
 from typing import Dict, Any, Optional
 from fastapi import HTTPException, Request, status
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from shared.environment import env
-from shared.models import User
+from shared.models import User, CompanyProfile
 from datetime import datetime, timezone
 from shared.utils import (
     create_access_token,
@@ -52,6 +54,37 @@ def register_company_controller(data: CompanyRegisterRequest, request: Request, 
             detail="An account with this email already exists",
         )
 
+    # BR-102-01: Business Registration Number (Vietnam MST) validation
+    raw_tax = (data.tax_id or data.tax_code or data.reg_number or "").strip()
+    clean_mst = re.sub(r"[^0-9]", "", raw_tax)
+
+    if not clean_mst:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Business Registration Number is required.",
+        )
+
+    # Format check: numeric only, 10 or 13 digits
+    if len(clean_mst) not in (10, 13):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Business Registration Number (MST) must be 10 or 13 digits (numeric only).",
+        )
+
+    # Uniqueness check: cannot register with existing MST
+    existing_company = (
+        db.query(CompanyProfile)
+        .filter(func.replace(CompanyProfile.tax_code, "-", "") == clean_mst)
+        .first()
+    )
+    if existing_company:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A company with this Business Registration Number (MST) is already registered.",
+        )
+
+    normalized_mst = f"{clean_mst[:10]}-{clean_mst[10:]}" if len(clean_mst) == 13 else clean_mst
+
     contact_name = data.contact_name or data.full_name or data.company_name or "Representative"
     company_name = data.company_name or "New Company"
 
@@ -65,7 +98,7 @@ def register_company_controller(data: CompanyRegisterRequest, request: Request, 
         industry=data.industry,
         size=data.size or data.company_size,
         website=data.website,
-        tax_code=data.tax_id or data.tax_code or data.reg_number,
+        tax_code=normalized_mst,
         about=data.about or data.description,
         logo_url=data.logo_url or data.logo,
     )

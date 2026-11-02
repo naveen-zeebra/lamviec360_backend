@@ -1424,3 +1424,4 @@ if __name__ == "__main__":
     build_excel_catalog()
     build_csv_catalog()
     print("Catalog generation completed successfully!")
+

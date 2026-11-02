@@ -12,6 +12,8 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 
 from shared.models import CompanyProfile, CompanyUser, CompanyInvitation
+from shared.environment import env
+from shared.utils.email import send_team_invitation_email
 from shared.utils.error_handler import service_error_handler
 from shared.utils.logger import get_logger
 
@@ -186,6 +188,33 @@ def create_team_invite(
         "activationUrl": f"/employee-activation?token={invite_token}",
     }
 
+    # Dispatch workspace invitation email
+    inviter_name = (
+        f"{getattr(user, 'first_name', '')} {getattr(user, 'last_name', '')}".strip()
+        or getattr(user, "full_name", None)
+        or getattr(profile, "company_name", None)
+        or "A workspace administrator"
+    )
+    company_name = getattr(profile, "company_name", "Employer Organization")
+    role_display = clean_role.replace("_", " ").title() if "_" in clean_role else clean_role
+    base_web_url = (getattr(env, "COMPANY_WEB_URL", None) or "http://localhost:3002").rstrip("/")
+    full_activation_url = f"{base_web_url}/employee-activation?token={invite_token}"
+
+    try:
+        send_team_invitation_email(
+            to_email=clean_email,
+            company_name=company_name,
+            inviter_name=inviter_name,
+            role_name=role_display,
+            activation_url=full_activation_url,
+            expiry_date_str=expiry.strftime("%d/%m/%Y"),
+            company_logo_url=getattr(profile, "logo_url", None),
+            custom_message=message or "",
+        )
+        logger.info(f"Team invitation email sent to {clean_email} with token {invite_token}")
+    except Exception as exc:
+        logger.error(f"Failed to send team invitation email to {clean_email}: {exc}")
+
     logger.info(f"Team invite created for {email} by user_id={user_id} in company {profile.id}")
     return new_invite
 
@@ -232,10 +261,38 @@ def resend_team_invite(db: Session, profile: CompanyProfile, user: Any, invite_i
         ).first()
 
     if inv:
-        inv.expires_at = datetime.now(timezone.utc) + timedelta(hours=72)
+        expiry = datetime.now(timezone.utc) + timedelta(hours=72)
+        inv.expires_at = expiry
         inv.status = "pending"
         db.commit()
         logger.info(f"Team invite id={invite_id} renewed and resent (72h expiry)")
+
+        inviter_name = (
+            f"{getattr(user, 'first_name', '')} {getattr(user, 'last_name', '')}".strip()
+            or getattr(user, "full_name", None)
+            or getattr(profile, "company_name", None)
+            or "A workspace administrator"
+        )
+        company_name = getattr(profile, "company_name", "Employer Organization")
+        role_display = inv.role.replace("_", " ").title() if "_" in inv.role else inv.role
+        base_web_url = (getattr(env, "COMPANY_WEB_URL", None) or "http://localhost:3002").rstrip("/")
+        full_activation_url = f"{base_web_url}/employee-activation?token={inv.invite_token}"
+
+        try:
+            send_team_invitation_email(
+                to_email=inv.email,
+                company_name=company_name,
+                inviter_name=inviter_name,
+                role_name=role_display,
+                activation_url=full_activation_url,
+                expiry_date_str=expiry.strftime("%d/%m/%Y"),
+                company_logo_url=getattr(profile, "logo_url", None),
+                custom_message=inv.message or "",
+            )
+            logger.info(f"Team invitation email resent to {inv.email} with token {inv.invite_token}")
+        except Exception as exc:
+            logger.error(f"Failed to resend team invitation email to {inv.email}: {exc}")
+
         return True
 
     return False

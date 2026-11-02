@@ -199,25 +199,51 @@ def reset_password(req: ResetPasswordRequest, request: Request, db: Session = De
     )
 
 
-@router.get("/validate-tax-id/{tax_id}", response_model=APIResponse[dict], summary="Validate Vietnam Business Tax ID via VietQR")
+@router.get("/validate-tax-id/{tax_id}", response_model=APIResponse[dict], summary="Validate Vietnam Business Registration Number (MST)")
 def validate_tax_id(tax_id: str, db: Session = Depends(get_db)):
     """
-    Validates a Vietnamese Tax ID / Business code using the official VietQR National Registry API.
-    API: https://api.vietqr.io/v2/business/{tax_id}
+    Validates a Vietnamese Business Registration Number (MST) according to EMP-FR-001 & BR-102-01.
+    Performs format check (10 or 13 digits) and uniqueness check against registered companies.
     """
     import re
+    from sqlalchemy import func
     from shared.models import CompanyProfile
     from shared.utils.logger import get_logger
 
     logger = get_logger("company_auth")
     clean_id = re.sub(r"[^0-9\-]", "", tax_id.strip())
-    if not clean_id or len(clean_id) < 8:
+    clean_digits = re.sub(r"[^0-9]", "", tax_id.strip())
+
+    # Format check: numeric only, 10 or 13 digits (BR-102-01)
+    if len(clean_digits) not in (10, 13):
         return success_response(
-            data={"valid": False, "tax_id": clean_id, "error": "Tax ID must be at least 8 digits"},
-            message="Invalid Tax ID format",
+            data={
+                "valid": False,
+                "tax_id": clean_id,
+                "already_registered": False,
+                "error": "Business Registration Number must be 10 or 13 digits (numeric only)",
+            },
+            message="Invalid Business Registration Number format",
         )
 
-    url = f"https://api.vietqr.io/v2/business/{clean_id}"
+    # Uniqueness check: cannot register with existing MST (BR-102-01)
+    existing = (
+        db.query(CompanyProfile)
+        .filter(func.replace(CompanyProfile.tax_code, "-", "") == clean_digits)
+        .first()
+    )
+    if existing:
+        return success_response(
+            data={
+                "valid": False,
+                "tax_id": clean_id,
+                "already_registered": True,
+                "error": "This Business Registration Number is already registered.",
+            },
+            message="Business Registration Number already registered",
+        )
+
+    url = f"https://api.vietqr.io/v2/business/{clean_digits}"
     try:
         import httpx
         with httpx.Client(timeout=6.0) as client:
@@ -226,41 +252,47 @@ def validate_tax_id(tax_id: str, db: Session = Depends(get_db)):
                 body = resp.json()
                 if body.get("code") == "00" and body.get("data"):
                     b_data = body["data"]
-                    existing = (
-                        db.query(CompanyProfile)
-                        .filter(CompanyProfile.tax_code == clean_id)
-                        .first()
-                    )
                     return success_response(
                         data={
                             "valid": True,
                             "tax_id": clean_id,
                             "business": b_data,
-                            "already_registered": existing is not None,
+                            "already_registered": False,
                         },
-                        message="Valid Business Tax ID",
+                        message="Valid Business Registration Number",
                     )
                 else:
                     return success_response(
                         data={
-                            "valid": False,
+                            "valid": True,
                             "tax_id": clean_id,
-                            "error": body.get("desc") or "Tax ID not found in Vietnam Business Registry",
+                            "already_registered": False,
                             "business": None,
+                            "notice": body.get("desc") or "Not yet indexed in online directory (Future Phase real-time verification)",
                         },
-                        message="Tax ID not found",
+                        message="Business Registration Number format valid",
                     )
+            return success_response(
+                data={
+                    "valid": True,
+                    "tax_id": clean_id,
+                    "already_registered": False,
+                    "business": None,
+                    "notice": "Business Registration Number format valid (Future Phase real-time verification)",
+                },
+                message="Business Registration Number format valid",
+            )
     except Exception as e:
-        logger.warning(f"VietQR lookup failed for {clean_id}: {e}")
-        is_format_ok = bool(re.match(r"^\d{10}(\-\d{3}|\d{3})?$", clean_id))
+        logger.warning(f"VietQR lookup failed for {clean_digits}: {e}")
         return success_response(
             data={
-                "valid": is_format_ok,
+                "valid": True,
                 "tax_id": clean_id,
                 "business": None,
                 "fallback": True,
-                "error": None if is_format_ok else "Tax ID format invalid (expected 10 or 13 digits)",
+                "already_registered": False,
+                "error": None,
             },
-            message="Tax ID validated with fallback",
+            message="Business Registration Number format valid with fallback",
         )
 

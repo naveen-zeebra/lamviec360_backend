@@ -60,6 +60,7 @@ import os
 uploads_dir = Path(__file__).resolve().parent.parent.parent.parent / "uploads"
 os.makedirs(uploads_dir, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
+app.mount("/api/v1/jobseeker/uploads", StaticFiles(directory=str(uploads_dir)), name="jobseeker_uploads")
 
 # Register routes
 register_routes(app)
