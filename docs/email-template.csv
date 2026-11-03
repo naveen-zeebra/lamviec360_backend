@@ -1,0 +1,456 @@
+﻿S.No,Scenario ID,Module,Scenario Name,Sender,Receiver,Category,Trigger Event,Subject (EN),Subject (VI),Total Content (English Body),Total Content (Vietnamese Body)
+1,SCN-AUTH-01,Jobseeker Authentication,Candidate Email Verification (Registration / Resend),LàmViệc360 <notifications@lamviec360.vn>,user.email,Security OTP,Candidate submits registration or clicks 'Resend Verification Code',{{code}} is your LamViec360 verification code,{{code}} là mã xác thực tài khoản LàmViệc360 của bạn,"Hi {{display_name}},
+
+Welcome to LamViec360! Please use the following 6-digit verification code to verify your email address and activate your job seeker account:
+
+Verification Code: {{code}}
+
+(This verification code expires in 15 minutes)
+
+If you did not request this verification, please disregard this email. Your account remains secure.
+
+Best regards,
+LamViec360 Career Portal Team","Xin chào {{display_name}},
+
+Chào mừng bạn đến với LàmViệc360! Vui lòng sử dụng mã xác thực 6 chữ số dưới đây để xác nhận địa chỉ email và kích hoạt tài khoản ứng viên của bạn:
+
+Mã xác thực (OTP): {{code}}
+
+(Mã xác thực có hiệu lực trong vòng 15 phút)
+
+Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email. Tài khoản của bạn vẫn được bảo mật an toàn.
+
+Trân trọng,
+Đội ngũ Cổng Việc làm LàmViệc360"
+2,SCN-AUTH-02,Jobseeker Authentication,Candidate Password Reset Request,LàmViệc360 Security <security@lamviec360.vn>,user.email,Account Security,Candidate clicks 'Forgot Password' and enters their registered email,{{otp_code}} is your LamViec360 password reset code,{{otp_code}} là mã đặt lại mật khẩu LàmViệc360 của bạn,"Hi {{display_name}},
+
+We received a request to reset the password for your LamViec360 account associated with {{to_email}}.
+
+Your 6-Digit Verification Code: {{otp_code}}
+(Valid for 15 minutes)
+
+You can also click the secure link below to set a new password:
+{{reset_url}}
+
+If you did not request a password reset, you can safely ignore this email; your password will not be changed.
+
+Best regards,
+LamViec360 Security Team","Xin chào {{display_name}},
+
+Hệ thống đã nhận được yêu cầu đặt lại mật khẩu cho tài khoản LàmViệc360 gắn với địa chỉ {{to_email}}.
+
+Mã xác thực đặt lại mật khẩu: {{otp_code}}
+(Có hiệu lực trong vòng 15 phút)
+
+Bạn cũng có thể nhấp trực tiếp vào đường dẫn bảo mật sau để tạo mật khẩu mới:
+{{reset_url}}
+
+Nếu bạn không yêu cầu đặt lại mật khẩu, vui lòng bỏ qua email này; mật khẩu hiện tại của bạn vẫn được giữ nguyên an toàn.
+
+Trân trọng,
+Bộ phận An toàn & Bảo mật LàmViệc360"
+3,SCN-AUTH-03,Employer Authentication,Employer Registration Work Email Verification,LàmViệc360 Employer Solutions <employer-support@lamviec360.vn>,user.email,Security OTP,Employer submits company registration form with business tax code and work email,{{code}} is your LamViec360 Employer verification code,{{code}} là mã xác thực tài khoản Nhà tuyển dụng LàmViệc360,"Hi {{display_name}},
+
+Welcome to the LamViec360 Employer Portal! Please use the following 6-digit verification code to verify your company administrator work email and complete your organization registration:
+
+Verification Code: {{code}}
+
+(This verification code expires in 15 minutes)
+
+If you did not request this email, please disregard it.
+
+Best regards,
+LamViec360 Employer Solutions Team","Kính gửi {{display_name}},
+
+Chào mừng Quý doanh nghiệp đến với Cổng Nhà tuyển dụng LàmViệc360! Vui lòng sử dụng mã xác thực 6 chữ số dưới đây để xác thực email quản trị viên và hoàn tất đăng ký doanh nghiệp:
+
+Mã xác thực doanh nghiệp: {{code}}
+
+(Mã xác thực có hiệu lực trong vòng 15 phút)
+
+Nếu Quý vị không thực hiện đăng ký này, xin vui lòng bỏ qua email.
+
+Trân trọng,
+Ban Hỗ trợ Doanh nghiệp LàmViệc360"
+4,SCN-AUTH-04,Employer Security,Company Admin Two-Factor Authentication (2FA OTP),LàmViệc360 Security <security@lamviec360.vn>,user.email,Security 2FA,Company Admin enters valid email and password on employer login portal,{{code}} is your LamViec360 Company Admin 2FA verification code,{{code}} là mã bảo mật 2FA đăng nhập Quản trị viên LàmViệc360,"Hi {{display_name}},
+
+A sign-in request was detected for your Company Administrator account for {{company_name}}.
+
+Please enter the Two-Factor Authentication (2FA) verification code below to complete your login:
+
+2FA Login Security Code: {{code}}
+
+(This 2FA security code expires in 15 minutes)
+
+Security Notice: Never share this code with anyone. If you did not initiate this login request, please change your password immediately.
+
+LamViec360 Employer Portal","Kính gửi {{display_name}},
+
+Hệ thống phát hiện một yêu cầu đăng nhập vào tài khoản Quản trị viên doanh nghiệp của Quý vị tại {{company_name}}.
+
+Vui lòng nhập mã xác thực 2 lớp (2FA) bên dưới để hoàn tất đăng nhập:
+
+Mã xác thực 2FA: {{code}}
+
+(Mã xác thực bảo mật có hiệu lực trong vòng 15 phút)
+
+Lưu ý an toàn: Tuyệt đối không chia sẻ mã này cho bất kỳ ai. Nếu Quý vị không thực hiện đăng nhập, vui lòng đổi mật khẩu ngay lập tức.
+
+Cổng Nhà tuyển dụng LàmViệc360"
+5,SCN-AUTH-05,Employer Authentication,Employer Password Reset Request,LàmViệc360 Security <security@lamviec360.vn>,user.email,Account Security,Company User clicks 'Forgot Password' on employer portal,{{otp_code}} is your LamViec360 employer password reset code,{{otp_code}} là mã đặt lại mật khẩu Nhà tuyển dụng LàmViệc360,"Hi {{display_name}},
+
+We received a request to reset the password for your employer account at {{to_email}}.
+
+Your 6-Digit Password Reset Code: {{otp_code}}
+(Valid for 15 minutes)
+
+Or click the link below to set a new password:
+{{reset_url}}
+
+If you did not request this, please disregard this email.
+
+Best regards,
+LamViec360 Security Team","Kính gửi {{display_name}},
+
+Chúng tôi đã nhận được yêu cầu đặt lại mật khẩu cho tài khoản tuyển dụng gắn với email {{to_email}}.
+
+Mã xác thực đặt lại mật khẩu: {{otp_code}}
+(Có hiệu lực trong vòng 15 phút)
+
+Hoặc nhấp vào đường dẫn bên dưới để thiết lập mật khẩu mới:
+{{reset_url}}
+
+Nếu Quý vị không yêu cầu thao tác này, xin vui lòng bỏ qua email.
+
+Trân trọng,
+Bộ phận An toàn & Bảo mật LàmViệc360"
+6,SCN-ADMIN-01,Super Admin Moderation,Company Account Verified & Approved Notice,LàmViệc360 Administration <admin@lamviec360.vn>,company.contact_email / admin.email,Moderation Decision,"Super Admin reviews tax code, business documents, and clicks 'Verify & Approve'",Congratulations! Your company account has been verified - LàmViệc360,Chúc mừng! Doanh nghiệp của bạn đã được xác thực thành công trên LàmViệc360,"Hi {{contact_name}},
+
+Great news! Your company profile for {{company_name}} has been officially reviewed, verified, and approved by the LàmViệc360 administration team.
+
+What you can do right now:
+- Publish Job Openings: reach thousands of verified candidates across Vietnam.
+- Manage Applicants: pipeline screening, team evaluation notes, and interview scheduling.
+- Verified Employer Badge: proudly showcased on all your public job postings.
+
+Sign in to your Employer Portal:
+{{portal_url}}
+
+Best regards,
+LàmViệc360 Administration Team","Kính gửi {{contact_name}},
+
+Tin vui! Hồ sơ doanh nghiệp của Quý vị cho {{company_name}} đã được Ban Quản trị LàmViệc360 chính thức thẩm định, đối chiếu pháp lý và phê duyệt xác thực.
+
+Các quyền lợi doanh nghiệp có thể sử dụng ngay:
+- Đăng tin tuyển dụng không giới hạn: tiếp cận hàng ngàn ứng viên tiềm năng trên toàn quốc.
+- Quy trình tuyển dụng ATS: sàng lọc hồ sơ, ghi chú đánh giá và lên lịch phỏng vấn thông minh.
+- Huy hiệu Doanh nghiệp đã xác thực (Verified Employer): nổi bật trên mọi tin tuyển dụng và trang công ty.
+
+Đăng nhập vào Cổng Nhà tuyển dụng:
+{{portal_url}}
+
+Trân trọng,
+Ban Quản trị Hệ sinh thái Tuyển dụng LàmViệc360"
+7,SCN-ADMIN-02,Super Admin Moderation,Company Account Registration Rejection Notice,LàmViệc360 Moderation <moderation@lamviec360.vn>,company.contact_email / admin.email,Moderation Decision,Super Admin rejects company registration with specific audit reason notes,Update regarding your company registration on LàmViệc360: {{company_name}},Thông báo về việc xét duyệt đăng ký doanh nghiệp trên LàmViệc360: {{company_name}},"Hi {{contact_name}},
+
+Thank you for your interest in hiring through LàmViệc360. Our verification team has reviewed your company registration for {{company_name}}.
+
+Unfortunately, we are unable to approve your company account at this time due to the following reason:
+{{reason}}
+
+Need assistance or have updated documents?
+If you have updated business registration certificates or believe this decision was made in error, please reply to this email or contact our support team at {{support_email}}.
+
+Best regards,
+LàmViệc360 Verification Team","Kính gửi {{contact_name}},
+
+Cảm ơn Quý doanh nghiệp đã quan tâm và đăng ký tài khoản tuyển dụng trên LàmViệc360. Bộ phận thẩm định đã kiểm tra hồ sơ đăng ký của {{company_name}}.
+
+Rất tiếc, hiện tại chúng tôi chưa thể phê duyệt tài khoản doanh nghiệp của Quý vị vì lý do sau:
+{{reason}}
+
+Hướng dẫn cập nhật giấy tờ hoặc hỗ trợ khiếu nại:
+Nếu Quý vị có giấy phép kinh doanh cập nhật hoặc cần giải đáp thêm, vui lòng phản hồi email này hoặc liên hệ bộ phận hỗ trợ tại {{support_email}}.
+
+Trân trọng,
+Hội đồng Thẩm định Doanh nghiệp LàmViệc360"
+8,SCN-TEAM-01,Team Collaboration,Workspace Team Member Invitation,LàmViệc360 Team <invitations@lamviec360.vn>,invitation.email,Team Invitation,Company Admin invites a new colleague via /company/team with assigned role,You're invited to join {{company_name}} on LàmViệc360 as {{role_name}},Lời mời tham gia không gian làm việc của {{company_name}} trên LàmViệc360 với vai trò {{role_name}},"Hello,
+
+{{inviter_name}} has invited you to collaborate in the {{company_name}} employer workspace on LàmViệc360 as {{role_name}}.
+
+{{custom_message_block}}
+
+To accept this invitation and activate your account, click the link below:
+{{activation_url}}
+
+Notice: This invitation is strictly valid for 72 hours and will expire on {{expiry_date_str}}.
+
+Quick instructions:
+1. Open the activation link above.
+2. Set up your secure password and profile.
+3. Access your {{company_name}} hiring dashboard.
+
+Best regards,
+LàmViệc360 Team","Xin chào,
+
+{{inviter_name}} đã gửi lời mời bạn tham gia cộng tác trong không gian tuyển dụng của {{company_name}} trên nền tảng LàmViệc360 với vai trò {{role_name}}.
+
+{{custom_message_block}}
+
+Để chấp nhận lời mời và kích hoạt tài khoản của bạn, vui lòng truy cập đường dẫn sau:
+{{activation_url}}
+
+Lưu ý bảo mật: Lời mời này có hiệu lực trong vòng 72 giờ và sẽ hết hạn vào ngày {{expiry_date_str}}.
+
+Các bước kích hoạt nhanh chóng:
+1. Nhấp vào đường dẫn kích hoạt ở trên.
+2. Thiết lập mật khẩu bảo mật và xác nhận thông tin cá nhân.
+3. Bắt đầu làm việc trên trang quản trị tuyển dụng của {{company_name}}.
+
+Trân trọng,
+Đội ngũ LàmViệc360"
+9,SCN-TEAM-02,Team Collaboration,Resend Team Member Workspace Invitation,LàmViệc360 Team <invitations@lamviec360.vn>,invitation.email,Team Invitation,Company Admin clicks 'Resend' on an unactivated pending team invitation,Reminder: You're invited to join {{company_name}} on LàmViệc360 as {{role_name}},Nhắc nhở: Lời mời tham gia {{company_name}} trên LàmViệc360 với vai trò {{role_name}},"Hello,
+
+This is a reminder that {{inviter_name}} has invited you to join the {{company_name}} team workspace on LàmViệc360 as {{role_name}}.
+
+Your refreshed activation link (valid for 72 hours until {{expiry_date_str}}):
+{{activation_url}}
+
+Click the link above to set up your password and access the workspace.
+
+Best regards,
+LàmViệc360 Team","Xin chào,
+
+Đây là thông báo nhắc nhở về lời mời từ {{inviter_name}} mời bạn tham gia không gian làm việc của {{company_name}} trên LàmViệc360 với vai trò {{role_name}}.
+
+Đường dẫn kích hoạt mới (có hiệu lực trong 72 giờ tới ngày {{expiry_date_str}}):
+{{activation_url}}
+
+Nhấp vào đường dẫn trên để tạo mật khẩu và bắt đầu sử dụng không gian tuyển dụng.
+
+Trân trọng,
+Đội ngũ LàmViệc360"
+10,SCN-APP-01,Candidate Applications,Application Submission Confirmation (24-Hour Review SLA),LàmViệc360 <applications@lamviec360.vn>,candidate.email,Application Receipt,Candidate submits a job application via the public jobseeker portal,Application Received: {{job_title}} at {{company_name}} (#{{application_id}}),Xác nhận nộp hồ sơ thành công: {{job_title}} tại {{company_name}} (#{{application_id}}),"Hi {{candidate_name}},
+
+Your application for {{job_title}} at {{company_name}} has been received successfully (Application ID: #{{application_id}}).
+
+Your profile is under review, and you can expect an update within 24 hours.
+
+View and track your application status anytime:
+{{tracker_url}}
+
+Best regards,
+LamViec360 Team","Chào bạn {{candidate_name}},
+
+Hồ sơ ứng tuyển của bạn cho vị trí {{job_title}} tại {{company_name}} đã được hệ thống ghi nhận thành công (Mã hồ sơ: #{{application_id}}).
+
+Hồ sơ của bạn đang được phòng nhân sự thẩm định. Bạn sẽ nhận được phản hồi cập nhật trong vòng 24 giờ tới.
+
+Theo dõi tiến độ xử lý hồ sơ bất kỳ lúc nào tại:
+{{tracker_url}}
+
+Trân trọng,
+Đội ngũ LàmViệc360"
+11,SCN-ATS-01,ATS Recruitment Pipeline,Application Acknowledgment & Initial Review Notice,Phòng Tuyển dụng {{company_name}} <recruiting@{{company_domain}}>,candidate.email,ATS Pipeline Notification,Recruiter moves candidate to 'Screening' stage or manually sends acknowledgment,Application Acknowledgment: {{job_title}} at {{company_name}},Xác nhận đã nhận hồ sơ ứng tuyển {{job_title}} - {{company_name}},"Dear {{candidate_name}},
+
+{{company_name}} acknowledges receipt of your application for the {{job_title}} position.
+
+Our hiring committee is currently reviewing your qualifications and portfolio. We will notify you of screening outcomes and next steps within 3 to 5 business days.
+
+Thank you for your interest in joining {{company_name}}.
+
+Sincerely,
+Recruiting Team, {{company_name}}","Kính gửi {{candidate_name}},
+
+{{company_name}} xin xác nhận đã nhận được hồ sơ ứng tuyển của bạn cho vị trí {{job_title}}.
+
+Hội đồng tuyển dụng đang tiến hành đánh giá chi tiết hồ sơ của bạn. Chúng tôi sẽ thông báo kết quả sàng lọc và các bước tiếp theo trong vòng 3 - 5 ngày làm việc.
+
+Cảm ơn sự quan tâm và tình cảm bạn dành cho {{company_name}}.
+
+Trân trọng,
+Phòng Tuyển dụng {{company_name}}"
+12,SCN-ATS-02,ATS Recruitment Pipeline,Candidate Document Verification Request (PDPD Compliant),Phòng Nhân sự {{company_name}} <hr@{{company_domain}}>,candidate.email,Verification Request,"Recruiter requests verification documents (payslips, previous contract, degree)",Document Verification Request: {{job_title}} - {{company_name}},Yêu cầu bổ sung tài liệu xác minh: {{job_title}} - {{company_name}},"Dear {{candidate_name}},
+
+To finalize your evaluation for {{job_title}}, {{company_name}} requests that you upload proof of past experience (most recent 3 months payslips, resignation decision, or previous contract) via your secure candidate portal on LàmViệc360.
+
+All documents are encrypted with AES-256 and strictly protected in full compliance with Decree 13/2023/ND-CP (Personal Data Protection Decree - PDPD). They are used exclusively for internal recruitment verification.
+
+Sincerely,
+Human Resources, {{company_name}}","Kính gửi {{candidate_name}},
+
+Để hoàn thiện thủ tục đánh giá ứng viên vào vị trí {{job_title}}, {{company_name}} kính đề nghị bạn tải lên các tài liệu xác thực kinh nghiệm (bảng lương 3 tháng gần nhất, quyết định thôi việc hoặc hợp đồng lao động trước đây) qua cổng ứng viên LàmViệc360.
+
+Toàn bộ tài liệu được mã hóa chuẩn AES-256 và bảo mật nghiêm ngặt theo Nghị định 13/2023/NĐ-CP (PDPD), chỉ phục vụ mục đích thẩm định tuyển dụng nội bộ.
+
+Trân trọng,
+Phòng Nhân sự {{company_name}}"
+13,SCN-ATS-03,ATS Recruitment Pipeline,Technical Interview Invitation (Online / In-Person),Đội ngũ Tuyển dụng {{company_name}} <recruiting@{{company_domain}}>,candidate.email,Interview Scheduling,Recruiter schedules a Technical Interview round in the ATS pipeline,Technical Interview Invitation: {{job_title}} at {{company_name}},Thư mời phỏng vấn kỹ thuật: {{job_title}} tại {{company_name}},"Dear {{candidate_name}},
+
+We were impressed by your background and are pleased to invite you to a Technical Interview for the {{job_title}} position at {{company_name}}.
+
+Interview Details:
+- Date: {{interview_date}} at {{interview_time}}
+- Format: Online via Google Meet
+- Meeting Link: {{interview_link}}
+- Estimated Duration: 45 - 60 minutes
+
+Please reply to this email to confirm if this time works for you, or suggest an alternative slot.
+
+Best of luck with your interview!
+
+Sincerely,
+Hiring Team, {{company_name}}","Kính gửi {{candidate_name}},
+
+Chúng tôi rất ấn tượng với hồ sơ của bạn và trân trọng kính mời bạn tham gia vòng Phỏng vấn Kỹ thuật cho vị trí {{job_title}} tại {{company_name}}.
+
+Thông tin chi tiết buổi phỏng vấn:
+- Thời gian: {{interview_date}} lúc {{interview_time}}
+- Hình thức: Phỏng vấn trực tuyến qua Google Meet
+- Đường dẫn tham gia: {{interview_link}}
+- Thời lượng dự kiến: 45 - 60 phút
+
+Vui lòng phản hồi email này để xác nhận thời gian có phù hợp với bạn không, hoặc đề xuất khung giờ thuận tiện khác.
+
+Chúc bạn có một buổi phỏng vấn thật tự tin và thành công!
+
+Trân trọng,
+Đội ngũ Tuyển dụng {{company_name}}"
+14,SCN-ATS-04,ATS Recruitment Pipeline,HR Screening Round Interview Invitation,{{sender_name}} <{{sender_email}}>,candidate.email,Interview Scheduling,Recruiter schedules a 20-30 minute preliminary HR conversation,HR Screening Invitation: {{job_title}} - {{company_name}},Thư mời trao đổi sơ bộ (HR Screening): {{job_title}} - {{company_name}},"Dear {{candidate_name}},
+
+Thank you for applying for the {{job_title}} role at {{company_name}}.
+
+Our HR team would like to invite you to a short conversation (20 - 30 minutes) to introduce our projects, workplace culture, and discuss your career aspirations.
+
+- Date & Time: {{interview_date}} at {{interview_time}}
+- Location / Link: {{interview_location}}
+
+Please confirm via email if this schedule fits your calendar. Looking forward to our chat!
+
+Sincerely,
+{{sender_name}}
+Human Resources, {{company_name}}","Kính gửi {{candidate_name}},
+
+Cảm ơn bạn đã ứng tuyển vào vị trí {{job_title}} tại {{company_name}}.
+
+Bộ phận Tuyển dụng muốn mời bạn tham gia một buổi trao đổi ngắn (khoảng 20 - 30 phút) để giới thiệu tổng quan về dự án, môi trường làm việc cũng như trao đổi về định hướng và mong muốn của bạn.
+
+- Thời gian: {{interview_date}} lúc {{interview_time}}
+- Địa điểm / Đường dẫn: {{interview_location}}
+
+Vui lòng xác nhận qua email nếu khung giờ trên phù hợp với bạn. Hẹn gặp lại bạn trong buổi trao đổi!
+
+Trân trọng,
+{{sender_name}}
+Phòng Nhân sự {{company_name}}"
+15,SCN-ATS-05,ATS Recruitment Pipeline,Formal Job Offer Letter & Compensation Package,Ban Giám đốc {{company_name}} <careers@{{company_domain}}>,candidate.email,Job Offer,Company moves candidate to 'Offered' stage and extends formal offer letter,Formal Job Offer: {{job_title}} - {{company_name}},Thư mời nhận việc (Job Offer): {{job_title}} - {{company_name}},"Dear {{candidate_name}},
+
+On behalf of the leadership at {{company_name}}, we are thrilled to extend a formal Job Offer for the position of {{job_title}}!
+
+We were thoroughly impressed by your skills, experience, and energy throughout our recruitment process. We are confident you will make an outstanding impact on our team and mission.
+
+Details regarding salary, benefits, probation period, and start date are attached.
+
+Please review and confirm your acceptance before {{date}}. Feel free to reach out with any questions.
+
+Welcome to the {{company_name}} family!
+
+Warm regards,
+Board of Directors, {{company_name}}","Kính gửi {{candidate_name}},
+
+Thay mặt Ban Lãnh đạo {{company_name}}, chúng tôi vô cùng vui mừng gửi tới bạn Thư mời nhận việc (Job Offer) cho vị trí {{job_title}}!
+
+Chúng tôi đánh giá rất cao năng lực và tinh thần làm việc của bạn trong suốt các vòng tuyển dụng vừa qua, và tin tưởng rằng bạn sẽ là một mảnh ghép xuất sắc đóng góp vào sự phát triển của công ty.
+
+Chi tiết về mức lương, chế độ đãi ngộ, thời gian thử việc và ngày bắt đầu công việc đã được đính kèm chi tiết.
+
+Vui lòng xem xét và gửi phản hồi xác nhận trước ngày {{date}}. Nếu bạn có bất kỳ câu hỏi nào, xin đừng ngần ngại liên hệ trực tiếp với chúng tôi.
+
+Chào mừng bạn gia nhập đại gia đình {{company_name}}!
+
+Trân trọng,
+Ban Giám đốc {{company_name}}"
+16,SCN-REJ-01,ATS Candidate Rejection,Rejection — Profile Does Not Match Requirements (Default),Đội ngũ Tuyển dụng {{company_name}} <recruiting@{{company_domain}}>,candidate.email,Candidate Rejection,Recruiter moves candidate to 'Rejected' (Default Reason RT-1),Update regarding your application for {{job_title}} at {{company_name}},Cập nhật về hồ sơ ứng tuyển {{job_title}} tại {{company_name}},"Dear {{candidate_name}},
+
+Thank you for your interest and for applying for the {{job_title}} role at {{company_name}}.
+
+After careful review of your qualifications against our current requirements, we regret to inform you that we will not be moving forward with your candidacy for this opening.
+
+Your profile has been safely saved in our talent pool so we can proactively reach out for future opportunities that align with your background.
+
+We wish you every success in your career journey!
+
+Sincerely,
+Recruiting Team, {{company_name}}","Kính gửi {{candidate_name}},
+
+Cảm ơn bạn đã quan tâm và ứng tuyển vào vị trí {{job_title}} tại {{company_name}}.
+
+Sau khi cân nhắc kỹ lưỡng hồ sơ và đối chiếu các yêu cầu hiện tại của vị trí, chúng tôi rất tiếc phải thông báo hiện tại công ty chưa thể chọn bạn đi tiếp trong quy trình tuyển dụng lần này.
+
+Hồ sơ của bạn đã được lưu trữ an toàn trong hệ thống dữ liệu nhân tài của chúng tôi để ưu tiên liên hệ cho các cơ hội phù hợp hơn trong tương lai.
+
+Chúc bạn luôn gặt hái nhiều thành công và may mắn trên con đường sự nghiệp!
+
+Trân trọng,
+Đội ngũ Tuyển dụng {{company_name}}"
+17,SCN-REJ-02,ATS Candidate Rejection,Rejection — Role Filled Internally,Phòng Nhân sự {{company_name}} <hr@{{company_domain}}>,candidate.email,Candidate Rejection,Recruiter selects reason 'Role filled internally' (RT-2),Notice regarding the {{job_title}} position at {{company_name}},Thông báo về vị trí {{job_title}} tại {{company_name}},"Dear {{candidate_name}},
+
+Thank you for dedicating your time to apply for the {{job_title}} position at {{company_name}}.
+
+We would like to inform you that this vacancy has been filled through an internal appointment within our company.
+
+We were very impressed by your qualifications and expertise. Our HR department will keep your details on file and reach out as soon as new positions matching your strengths open up.
+
+Wishing you great success!
+
+Sincerely,
+Human Resources, {{company_name}}","Kính gửi {{candidate_name}},
+
+Cảm ơn bạn đã dành thời gian quý báu ứng tuyển vào vị trí {{job_title}} tại {{company_name}}.
+
+Chúng tôi xin thông báo rằng vị trí tuyển dụng này đã được bổ nhiệm từ nguồn lực nội bộ của công ty.
+
+Chúng tôi rất ấn tượng với năng lực chuyên môn cùng kinh nghiệm của bạn. Bộ phận Nhân sự sẽ chủ động kết nối lại với bạn ngay khi có các vị trí mới phù hợp với thế mạnh của bạn.
+
+Chúc bạn nhiều thành công!
+
+Trân trọng,
+Phòng Nhân sự {{company_name}}"
+18,SCN-REJ-03,ATS Candidate Rejection,Rejection — More Experienced Candidate Selected,Hội đồng Tuyển dụng {{company_name}} <recruiting@{{company_domain}}>,candidate.email,Candidate Rejection,Recruiter selects reason 'More experienced candidate selected' (RT-3),Recruitment Result: {{job_title}} - {{company_name}},Kết quả tuyển dụng vị trí {{job_title}} - {{company_name}},"Dear {{candidate_name}},
+
+Thank you for interviewing and discussing the {{job_title}} opportunity with {{company_name}}.
+
+We received many outstanding applications, and after thorough evaluations, our hiring committee has decided to select a candidate with more specialized experience in the specific domain of this project.
+
+We deeply appreciate your time and thorough preparation. We hope to have the opportunity to collaborate with you on upcoming projects.
+
+Sincerely,
+Hiring Committee, {{company_name}}","Kính gửi {{candidate_name}},
+
+Cảm ơn bạn đã tham gia ứng tuyển và trao đổi về vị trí {{job_title}} tại {{company_name}}.
+
+Chúng tôi đã nhận được nhiều hồ sơ chất lượng cao và sau các vòng đánh giá, hội đồng tuyển dụng đã quyết định lựa chọn ứng viên có kinh nghiệm chuyên sâu hơn trong lĩnh vực cụ thể của dự án lần này.
+
+Chúng tôi rất trân trọng thời gian và sự chuẩn bị chu đáo của bạn. Rất mong sẽ có cơ hội hợp tác cùng bạn trong các dự án sắp tới.
+
+Trân trọng,
+Hội đồng Tuyển dụng {{company_name}}"
+19,SCN-REJ-04,ATS Candidate Rejection,Rejection — Position Put On Hold / Cancelled,Đội ngũ Nhân sự {{company_name}} <hr@{{company_domain}}>,candidate.email,Candidate Rejection,Recruiter selects reason 'Position put on hold' (RT-4),Recruitment Pause: {{job_title}} at {{company_name}},Tạm dừng tuyển dụng vị trí {{job_title}} tại {{company_name}},"Dear {{candidate_name}},
+
+Thank you for your interest and for submitting your application for {{job_title}} at {{company_name}}.
+
+Due to strategic adjustments in our business plan and project scope, we have temporarily paused hiring for this position at this time.
+
+Your profile remains carefully saved, and we will reactivate our conversation as soon as project hiring resumes. Thank you for your patience and understanding.
+
+Sincerely,
+Human Resources Team, {{company_name}}","Kính gửi {{candidate_name}},
+
+Cảm ơn bạn đã quan tâm và nộp hồ sơ ứng tuyển vị trí {{job_title}} tại {{company_name}}.
+
+Do có sự điều chỉnh trong kế hoạch kinh doanh và cơ cấu dự án, công ty chúng tôi tạm thời dừng kế hoạch tuyển dụng cho vị trí này trong giai đoạn hiện tại.
+
+Hồ sơ của bạn vẫn được lưu giữ cẩn thận và chúng tôi sẽ kích hoạt lại liên hệ ngay khi dự án mở lại đợt tuyển mới. Cảm ơn sự thông cảm và đồng hành của bạn.
+
+Trân trọng,
+Đội ngũ Nhân sự {{company_name}}"
