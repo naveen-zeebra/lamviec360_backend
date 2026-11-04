@@ -6,6 +6,8 @@ class ApplicantStatusUpdateSchema(BaseModel):
     status: str
     recruiter_notes: Optional[str] = None
     rating: Optional[int] = None
+    suppress_notification: Optional[bool] = False
+    delay_hours: Optional[int] = 0
 
 
 class BulkStageRequest(BaseModel):
@@ -13,6 +15,8 @@ class BulkStageRequest(BaseModel):
     status: str
     rejection_template_id: Optional[Union[int, str]] = None
     rejection_note: Optional[str] = None
+    suppress_notification: Optional[bool] = False
+    delay_hours: Optional[int] = 0
 
 
 class CandidateNoteRequest(BaseModel):

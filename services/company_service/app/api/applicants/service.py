@@ -352,6 +352,65 @@ def serialize_applicant_detail(app: JobApplication) -> Dict[str, Any]:
     }
 
 
+def _dispatch_stage_notification(
+    db: Session,
+    app: JobApplication,
+    old_status: str,
+    new_status: str,
+    suppress_notification: bool = False,
+    delay_hours: int = 0,
+) -> None:
+    """Helper to dispatch stage transition notifications per LV360-FSD-006."""
+    if old_status == new_status:
+        return
+    try:
+        seeker = db.query(JobSeekerProfile).filter(JobSeekerProfile.id == app.jobseeker_id).first()
+        seeker_user = db.query(User).filter(User.id == seeker.user_id).first() if seeker else None
+        job = db.query(JobPosting).filter(JobPosting.id == app.job_id).first()
+        company = db.query(CompanyProfile).filter(CompanyProfile.id == job.company_id).first() if job else None
+
+        candidate_email = seeker_user.email if seeker_user else None
+        candidate_name = (seeker.full_name if seeker and hasattr(seeker, "full_name") else None) or (seeker_user.full_name if seeker_user else "Ứng viên")
+        job_title = job.title if job else "Vị trí tuyển dụng"
+        company_name = (company.company_name if company and hasattr(company, "company_name") else getattr(company, "name", None)) or "Doanh nghiệp"
+
+        s_lower = new_status.lower()
+        event = None
+        if "interview" in s_lower:
+            event = "SCN-ATS-03"
+        elif "offer" in s_lower:
+            event = "SCN-ATS-05"
+        elif "reject" in s_lower:
+            event = "SCN-REJ-01"
+        elif "shortlist" in s_lower or "screen" in s_lower:
+            event = "SCN-ATS-01"
+
+        if event and candidate_email:
+            NotificationService.dispatch(
+                event=event,
+                recipient_email=candidate_email,
+                context={
+                    "candidate_name": candidate_name,
+                    "job_title": job_title,
+                    "company_name": company_name,
+                    "date": datetime.utcnow().strftime("%d/%m/%Y"),
+                    "interview_date": (datetime.utcnow() + timedelta(days=3)).strftime("%d/%m/%Y"),
+                    "interview_time": "14:00 (GMT+7)",
+                    "interview_format": "Trực tuyến qua Google Meet / Online",
+                    "interview_link": "https://meet.google.com/lv360-interview",
+                    "tracker_url": f"{env.JOBSEEKER_WEB_URL}/applications",
+                },
+                db=db,
+                user_id=seeker.user_id if seeker else None,
+                channels=["email", "in_app"],
+                suppressed=suppress_notification,
+                delay_hours=delay_hours,
+                application_id=app.id,
+            )
+    except Exception as ex:
+        logger.warning(f"Failed to dispatch ATS stage notification for app id={app.id}: {ex}")
+
+
 @service_error_handler
 def update_applicant_status_and_notes(
     db: Session,
@@ -359,8 +418,11 @@ def update_applicant_status_and_notes(
     status: str,
     notes: Optional[str] = None,
     rating: Optional[int] = None,
+    suppress_notification: bool = False,
+    delay_hours: int = 0,
 ) -> JobApplication:
-    """Update status, rating, and notes on application."""
+    """Update status, rating, and notes on application and dispatch stage notification."""
+    old_status = app.status
     app.status = status
     if notes is not None:
         app.recruiter_notes = notes
@@ -368,6 +430,15 @@ def update_applicant_status_and_notes(
         app.rating = rating
     db.commit()
     logger.info(f"Updated application id={app.id} to status='{status}', rating={rating}")
+
+    _dispatch_stage_notification(
+        db=db,
+        app=app,
+        old_status=old_status,
+        new_status=status,
+        suppress_notification=suppress_notification,
+        delay_hours=delay_hours,
+    )
     return app
 
 
@@ -378,8 +449,10 @@ def bulk_update_applicant_stage(
     application_ids: List[Any],
     status: str,
     rejection_note: Optional[str] = None,
+    suppress_notification: bool = False,
+    delay_hours: int = 0,
 ) -> int:
-    """Bulk update applicant stage safely supporting string or int ids."""
+    """Bulk update applicant stage safely supporting string or int ids and notifications."""
     clean_ids: List[int] = []
     for aid in application_ids:
         try:
@@ -396,12 +469,24 @@ def bulk_update_applicant_stage(
         .filter(JobApplication.id.in_(clean_ids), JobPosting.company_id == company_id)
         .all()
     )
+    old_statuses = {app.id: app.status for app in apps}
     for app in apps:
         app.status = status
         if rejection_note:
             app.recruiter_notes = rejection_note
     db.commit()
     logger.info(f"Bulk updated {len(apps)} applications to status='{status}'")
+
+    for app in apps:
+        _dispatch_stage_notification(
+            db=db,
+            app=app,
+            old_status=old_statuses.get(app.id, ""),
+            new_status=status,
+            suppress_notification=suppress_notification,
+            delay_hours=delay_hours,
+        )
+
     return len(apps)
 
 

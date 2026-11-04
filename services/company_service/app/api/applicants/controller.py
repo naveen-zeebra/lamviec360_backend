@@ -122,6 +122,8 @@ def update_applicant_status_controller(
         status=data.status,
         notes=data.recruiter_notes,
         rating=data.rating,
+        suppress_notification=bool(data.suppress_notification),
+        delay_hours=int(data.delay_hours or 0),
     )
 
     log_audit_event(
@@ -152,6 +154,8 @@ def bulk_update_status_controller(
         application_ids=data.application_ids,
         status=data.status,
         rejection_note=data.rejection_note,
+        suppress_notification=bool(data.suppress_notification),
+        delay_hours=int(data.delay_hours or 0),
     )
     log_audit_event(
         db,

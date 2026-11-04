@@ -17,6 +17,9 @@ from shared.utils.resume_storage import (
     save_resume_bytes,
 )
 from services.jobseeker_service.app.api.profile import resume_service
+from shared.notifications import NotificationService
+from shared.environment import env
+from datetime import datetime
 
 logger = get_logger("jobseeker_applications_service")
 
@@ -223,6 +226,31 @@ def create_application(
     db.commit()
     db.refresh(application)
     logger.info(f"Created application id={application.id} for job_id={job.id} by profile_id={profile.id}")
+
+    # Dispatch SCN-APP-01 (Application Confirmation with 24h SLA per LV360-FSD-006)
+    try:
+        user_obj = profile.user
+        if user_obj and user_obj.email:
+            company_title = (job.company.company_name if job.company and hasattr(job.company, "company_name") else getattr(job.company, "name", None)) or "Doanh nghiệp"
+            NotificationService.dispatch(
+                event="SCN-APP-01",
+                recipient_email=user_obj.email,
+                context={
+                    "candidate_name": user_obj.full_name or "Ứng viên",
+                    "job_title": job.title,
+                    "company_name": company_title,
+                    "application_id": str(application.id),
+                    "date": datetime.utcnow().strftime("%d/%m/%Y"),
+                    "tracker_url": f"{env.JOBSEEKER_WEB_URL}/applications",
+                },
+                db=db,
+                user_id=user_obj.id,
+                channels=["email", "in_app"],
+                application_id=application.id,
+            )
+    except Exception as ex:
+        logger.warning(f"Failed to dispatch SCN-APP-01 application notification: {ex}")
+
     return application, resolved_id
 
 

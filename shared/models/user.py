@@ -15,6 +15,7 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
     last_name = Column(String(100), nullable=True)
     phone = Column(String(50), nullable=True)
     avatar_url = Column(Text, nullable=True)
+    preferred_language = Column(String(10), default="vi", nullable=False)  # "vi" (primary) or "en" (secondary)
 
     is_active = Column(Boolean, default=True, nullable=False)
     is_verified = Column(Boolean, default=False, nullable=False)
@@ -25,6 +26,7 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
     jobseeker_profile = relationship("JobSeekerProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
     company_profile = relationship("CompanyProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
     oauth_accounts = relationship("OAuthAccount", back_populates="user", cascade="all, delete-orphan")
+    notification_preferences = relationship("NotificationPreference", back_populates="user", uselist=False, cascade="all, delete-orphan")
 
     def __init__(self, **kwargs):
         # Support aliases
