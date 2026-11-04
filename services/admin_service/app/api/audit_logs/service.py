@@ -4,8 +4,9 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 from typing import Optional, List, Dict, Any, Tuple
+import json
 from sqlalchemy.orm import Session
-from sqlalchemy import desc
+from sqlalchemy import desc, or_
 
 from shared.models import AuditLog
 from shared.utils.error_handler import service_error_handler
@@ -16,6 +17,13 @@ logger = get_logger("admin_audit_logs_service")
 
 def serialize_audit_log(l: AuditLog) -> Dict[str, Any]:
     """Serialize AuditLog ORM model to dictionary."""
+    parsed_details = None
+    if l.details:
+        try:
+            parsed_details = json.loads(l.details)
+        except Exception:
+            parsed_details = l.details
+
     return {
         "id": l.id,
         "user_id": l.user_id,
@@ -25,7 +33,8 @@ def serialize_audit_log(l: AuditLog) -> Dict[str, Any]:
         "module": l.module,
         "description": l.description,
         "ip_address": l.ip_address,
-        "details": l.details,
+        "user_agent": l.user_agent,
+        "details": parsed_details,
         "created_at": l.created_at.isoformat() if l.created_at else None,
     }
 
@@ -39,15 +48,23 @@ def query_audit_logs(
     page: int = 1,
     page_size: int = 15,
 ) -> Tuple[List[Dict[str, Any]], int]:
-    """Retrieve filtered and paginated audit logs."""
+    """Retrieve filtered and paginated audit logs with multi-field search."""
     query = db.query(AuditLog)
 
-    if module:
+    if module and module != "All":
         query = query.filter(AuditLog.module == module)
-    if action:
+    if action and action != "All":
         query = query.filter(AuditLog.action == action)
-    if search:
-        query = query.filter(AuditLog.description.ilike(f"%{search.strip()}%"))
+    if search and search.strip():
+        term = f"%{search.strip()}%"
+        query = query.filter(
+            or_(
+                AuditLog.description.ilike(term),
+                AuditLog.user_email.ilike(term),
+                AuditLog.action.ilike(term),
+                AuditLog.module.ilike(term),
+            )
+        )
 
     total_items = query.count()
     offset = (page - 1) * page_size

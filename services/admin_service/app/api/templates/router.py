@@ -4,8 +4,10 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 from typing import List
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
+from sqlalchemy.orm import Session
 
+from shared.database.session import get_db
 from shared.models import User
 from shared.schemas import APIResponse
 from shared.utils import require_roles, success_response
@@ -38,9 +40,17 @@ def list_global_templates(
 def update_global_template(
     scenario_id: str,
     payload: UpdateMasterTemplateRequest,
+    request: Request,
     admin: User = Depends(require_roles(["super_admin", "admin"])),
+    db: Session = Depends(get_db),
 ):
-    data = update_template_controller(scenario_id=scenario_id, payload=payload)
+    data = update_template_controller(
+        scenario_id=scenario_id,
+        payload=payload,
+        current_admin=admin,
+        db=db,
+        request=request,
+    )
     return success_response(data=data, message="Master template updated successfully")
 
 
@@ -55,7 +65,14 @@ def get_notification_config(
 @router.put("/config", response_model=APIResponse[MasterConfigResponse], summary="Update Platform Notification Config")
 def update_notification_config(
     payload: UpdateMasterConfigRequest,
+    request: Request,
     admin: User = Depends(require_roles(["super_admin", "admin"])),
+    db: Session = Depends(get_db),
 ):
-    data = update_config_controller(payload=payload)
+    data = update_config_controller(
+        payload=payload,
+        current_admin=admin,
+        db=db,
+        request=request,
+    )
     return success_response(data=data, message="Platform notification configuration updated successfully")

@@ -19,6 +19,7 @@ from shared.models import (
     AdminRolePermission,
     CompanyUser,
     CompanyInvitation,
+    AuditLog,
 )
 from shared.utils.password import hash_password
 from shared.utils.logger import get_logger
@@ -712,6 +713,62 @@ def seed_database(db: Session = None):
                 db.flush()
                 logger.info("Created 3 demo applicants for Tenant 2 (ABC Technologies)")
 
+        # Seed initial audit logs if empty
+        if db.query(AuditLog).count() == 0:
+            logger.info("Seeding initial system audit logs...")
+            now = datetime.now(timezone.utc)
+            initial_logs = [
+                AuditLog(
+                    action="SYSTEM_INIT",
+                    module="CONFIGURATION",
+                    description="Super Admin Gateway initialized with baseline schema and RBAC security rules",
+                    user_email="system@lamviec360.vn",
+                    user_type="system",
+                    ip_address="127.0.0.1",
+                    created_at=now - timedelta(days=7),
+                ),
+                AuditLog(
+                    action="ROLE_PROVISION",
+                    module="ROLES",
+                    description="Provisioned default Super Admin and Compliance Officer roles with full tenant governance",
+                    user_email="superadmin@lamviec360.com",
+                    user_type="super_admin",
+                    ip_address="192.168.1.10",
+                    created_at=now - timedelta(days=6),
+                ),
+                AuditLog(
+                    action="VERIFY_COMPANY",
+                    module="ADMIN_COMPANIES",
+                    description="Approved company ABC Technologies (MST: 0300588569) after automated tax code check",
+                    user_email="superadmin@lamviec360.com",
+                    user_type="super_admin",
+                    ip_address="192.168.1.10",
+                    details=json.dumps({"company": "ABC Technologies", "status": "Active"}),
+                    created_at=now - timedelta(days=4),
+                ),
+                AuditLog(
+                    action="UPDATE_COMPANY_PLAN",
+                    module="ADMIN_COMPANIES",
+                    description="Assigned Enterprise Tier commercial subscription to ABC Technologies",
+                    user_email="superadmin@lamviec360.com",
+                    user_type="super_admin",
+                    ip_address="192.168.1.10",
+                    details=json.dumps({"plan": "Enterprise", "limit": "Unlimited"}),
+                    created_at=now - timedelta(days=3),
+                ),
+                AuditLog(
+                    action="JOB_MODERATION",
+                    module="JOBS",
+                    description="Approved job posting Senior Fullstack Engineer for ABC Technologies",
+                    user_email="superadmin@lamviec360.com",
+                    user_type="super_admin",
+                    ip_address="192.168.1.10",
+                    created_at=now - timedelta(days=1),
+                ),
+            ]
+            db.add_all(initial_logs)
+            db.flush()
+
         db.commit()
         logger.info("Database seeding completed successfully.")
     except Exception as e:
@@ -724,3 +781,5 @@ def seed_database(db: Session = None):
 
 if __name__ == "__main__":
     seed_database()
+
+

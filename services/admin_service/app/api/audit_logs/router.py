@@ -22,7 +22,7 @@ def list_audit_logs(
     action: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
-    page_size: int = Query(15, ge=1, le=100),
+    page_size: int = Query(15, ge=1, le=5000),
     current_admin: User = Depends(require_roles("super_admin", "admin")),
     db: Session = Depends(get_db),
 ):
