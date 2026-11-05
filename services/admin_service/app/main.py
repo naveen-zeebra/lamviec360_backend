@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 from contextlib import asynccontextmanager
@@ -6,6 +7,7 @@ from contextlib import asynccontextmanager
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -37,6 +39,11 @@ app = FastAPI(
     redoc_url="/redoc",
     lifespan=lifespan,
 )
+
+# Static files for uploaded banners, logos, and media
+uploads_dir = Path(__file__).resolve().parent.parent.parent.parent / "uploads"
+os.makedirs(uploads_dir, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
 
 # SlowAPI Rate Limiter
 app.state.limiter = limiter

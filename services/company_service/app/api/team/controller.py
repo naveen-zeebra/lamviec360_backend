@@ -6,7 +6,7 @@
 from typing import Dict, Any
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
-
+from shared.utils import log_audit_event
 from shared.utils.logger import get_logger
 
 from . import service
@@ -29,7 +29,7 @@ def get_company_team_controller(user: Any, db: Session) -> Dict[str, Any]:
 def invite_team_member_controller(req: TeamInviteRequest, user: Any, db: Session) -> Dict[str, Any]:
     """Invite a new team member and dispatch invitation."""
     profile = service.get_tenant_profile(db, user)
-    return service.create_team_invite(
+    res = service.create_team_invite(
         db=db,
         profile=profile,
         user=user,
@@ -37,6 +37,20 @@ def invite_team_member_controller(req: TeamInviteRequest, user: Any, db: Session
         role=req.role,
         message=req.message,
     )
+    try:
+        log_audit_event(
+            db,
+            action="INVITE_TEAM_MEMBER",
+            module="COMPANY_TEAM",
+            description=f"User {user.email} invited {req.email} as {req.role}",
+            user_id=getattr(user, "id", None),
+            user_email=getattr(user, "email", None),
+            user_type=getattr(user, "user_type", "company"),
+            details={"email": req.email, "role": req.role},
+        )
+    except Exception as e:
+        logger.warning(f"Audit log failed: {e}")
+    return res
 
 
 def revoke_team_invitation_controller(invite_id: str, user: Any, db: Session) -> None:
@@ -45,6 +59,18 @@ def revoke_team_invitation_controller(invite_id: str, user: Any, db: Session) ->
     revoked = service.revoke_team_invite(db, profile, user, invite_id)
     if not revoked:
         raise HTTPException(status_code=404, detail="Invitation not found")
+    try:
+        log_audit_event(
+            db,
+            action="REVOKE_INVITATION",
+            module="COMPANY_TEAM",
+            description=f"User {user.email} revoked invitation {invite_id}",
+            user_id=getattr(user, "id", None),
+            user_email=getattr(user, "email", None),
+            user_type=getattr(user, "user_type", "company"),
+        )
+    except Exception as e:
+        logger.warning(f"Audit log failed: {e}")
 
 
 def resend_team_invitation_controller(invite_id: str, user: Any, db: Session) -> None:
@@ -61,6 +87,18 @@ def update_member_role_controller(member_id: str, req: MemberRoleUpdateRequest, 
     found = service.update_team_member_role(db, profile, user, member_id, req.role)
     if not found:
         raise HTTPException(status_code=404, detail="Team member not found")
+    try:
+        log_audit_event(
+            db,
+            action="UPDATE_MEMBER_ROLE",
+            module="COMPANY_TEAM",
+            description=f"User {user.email} updated role of member {member_id} to {req.role}",
+            user_id=getattr(user, "id", None),
+            user_email=getattr(user, "email", None),
+            user_type=getattr(user, "user_type", "company"),
+        )
+    except Exception as e:
+        logger.warning(f"Audit log failed: {e}")
 
 
 def update_member_status_controller(member_id: str, req: MemberStatusUpdateRequest, user: Any, db: Session) -> None:
@@ -77,6 +115,18 @@ def remove_team_member_controller(member_id: str, user: Any, db: Session) -> Non
     found = service.remove_team_member(db, profile, user, member_id)
     if not found:
         raise HTTPException(status_code=404, detail="Team member not found")
+    try:
+        log_audit_event(
+            db,
+            action="REMOVE_MEMBER",
+            module="COMPANY_TEAM",
+            description=f"User {user.email} removed member {member_id}",
+            user_id=getattr(user, "id", None),
+            user_email=getattr(user, "email", None),
+            user_type=getattr(user, "user_type", "company"),
+        )
+    except Exception as e:
+        logger.warning(f"Audit log failed: {e}")
 
 
 def get_company_roles_controller(user: Any, db: Session) -> Dict[str, Any]:
@@ -94,4 +144,3 @@ def create_custom_role_controller(req: Any, user: Any, db: Session) -> Dict[str,
     """Create a new tenant custom role."""
     profile = service.get_tenant_profile(db, user)
     return service.create_custom_company_role(db, profile, user, req)
-

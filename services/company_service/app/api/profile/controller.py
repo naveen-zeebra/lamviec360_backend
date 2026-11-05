@@ -6,6 +6,7 @@
 from typing import Dict, Any
 from sqlalchemy.orm import Session
 from shared.models import User
+from shared.utils import log_audit_event
 from shared.utils.logger import get_logger
 from . import service
 from .schemas import CompanyProfileUpdateSchema
@@ -28,4 +29,20 @@ def update_company_profile_controller(
     profile = service.get_or_create_company_profile(db, user)
     data_dict = data.model_dump(exclude_unset=True) if hasattr(data, "model_dump") else data.dict(exclude_unset=True)
     updated_profile = service.update_company_profile_fields(db, profile, data_dict)
+
+    # Log audit event for employer profile update
+    try:
+        log_audit_event(
+            db,
+            action="UPDATE_COMPANY_PROFILE",
+            module="COMPANY_PROFILE",
+            description=f"Company '{updated_profile.company_name}' profile updated by {user.email}",
+            user_id=user.id,
+            user_email=user.email,
+            user_type=getattr(user, "user_type", "company"),
+            details=data_dict,
+        )
+    except Exception as e:
+        logger.warning(f"Could not record company profile audit log: {e}")
+
     return service.serialize_company_profile(updated_profile, user)

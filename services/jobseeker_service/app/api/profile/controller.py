@@ -8,6 +8,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from shared.models import User
+from shared.utils import log_audit_event
 from shared.utils.logger import get_logger
 
 from . import service
@@ -31,6 +32,22 @@ def update_profile_controller(
     profile = service.get_or_create_jobseeker_profile(db, user)
     data_dict = data.model_dump(exclude_unset=True) if hasattr(data, "model_dump") else data.dict(exclude_unset=True)
     user, profile = service.update_profile_and_user(db, user, profile, data_dict)
+
+    # Log candidate profile update event
+    try:
+        log_audit_event(
+            db,
+            action="UPDATE_PROFILE",
+            module="JOBSEEKER_PROFILE",
+            description=f"Candidate {user.email} updated profile & resume details",
+            user_id=user.id,
+            user_email=user.email,
+            user_type=getattr(user, "user_type", "jobseeker"),
+            details=data_dict,
+        )
+    except Exception as e:
+        logger.warning(f"Could not record candidate audit event: {e}")
+
     return service.serialize_profile(user, profile)
 
 
