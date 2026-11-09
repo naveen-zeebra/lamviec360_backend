@@ -11,6 +11,8 @@ from services.admin_service.app.api.plans.router import router as plans_router
 from services.admin_service.app.api.admin_users.router import router as admin_users_router
 from services.admin_service.app.api.templates.router import router as templates_router
 from services.admin_service.app.api.master_data.router import router as master_data_router
+from services.admin_service.app.api.support.router import router as support_router
+from services.admin_service.app.api.banners.router import router as banners_router
 
 routers = [
     auth_router,
@@ -25,6 +27,8 @@ routers = [
     admin_users_router,
     templates_router,
     master_data_router,
+    support_router,
+    banners_router,
 ]
 
 def register_routes(app: FastAPI) -> None:

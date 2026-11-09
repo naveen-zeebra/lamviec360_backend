@@ -97,6 +97,10 @@ def apply_for_job_controller(
         app.acknowledgment_sent_at = datetime.now(timezone.utc)
         db.commit()
     except Exception as db_err:
+        try:
+            db.rollback()
+        except Exception:
+            pass
         logger.warning(f"Could not update acknowledgment status for app id={app.id}: {db_err}")
 
     # In-app notification
@@ -109,10 +113,17 @@ def apply_for_job_controller(
             type="confirmation",
             application_id=app.id,
             read=False,
+            channel="in_app",
+            delivery_status="delivered",
+            language="vi",
         )
         db.add(notif)
         db.commit()
     except Exception as notif_err:
+        try:
+            db.rollback()
+        except Exception:
+            pass
         logger.warning(f"Could not create notification for application: {notif_err}")
 
     log_audit_event(

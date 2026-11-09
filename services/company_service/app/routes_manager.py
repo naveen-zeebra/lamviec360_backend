@@ -8,6 +8,8 @@ from services.company_service.app.api.team.router import router as team_router
 from services.company_service.app.api.templates.router import router as templates_router
 from services.company_service.app.api.data_retention.router import router as data_retention_router
 from services.admin_service.app.api.master_data.router import router as master_data_router
+from services.admin_service.app.api.support.router import router as support_router
+from services.admin_service.app.api.banners.router import router as banners_router
 
 PREFIX = "/api/v1/company"
 
@@ -21,3 +23,10 @@ def register_routes(app: FastAPI) -> None:
     app.include_router(templates_router, prefix=PREFIX)
     app.include_router(data_retention_router, prefix=PREFIX)
     app.include_router(master_data_router, prefix="/api/v1")
+    # Support submission routes (accessible via /api/v1/company/support and /api/v1/support)
+    app.include_router(support_router, prefix=PREFIX)
+    app.include_router(support_router, prefix="/api/v1")
+
+    # Banner delivery routes
+    app.include_router(banners_router, prefix=PREFIX)
+    app.include_router(banners_router, prefix="/api/v1")

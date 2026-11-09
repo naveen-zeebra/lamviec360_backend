@@ -131,11 +131,18 @@ class NotificationService:
                     type=event.lower(),
                     application_id=application_id,
                     read=False,
+                    channel="in_app",
+                    delivery_status="delivered",
+                    language=resolved_lang,
                 )
                 db.add(notif)
                 db.commit()
                 results["channels"]["in_app"] = "stored"
             except Exception as ex:
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
                 logger.warning(f"In-app notification storage error for user {user_id}: {ex}")
                 results["channels"]["in_app"] = "failed"
 

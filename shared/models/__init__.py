@@ -18,6 +18,8 @@ from shared.models.admin_user import (
     AdminRefreshToken,
     AdminPasswordReset,
 )
+from shared.models.support import SupportTicket, SupportTicketMessage
+from shared.models.banner import Banner
 
 __all__ = [
     "Base",
@@ -47,4 +49,7 @@ __all__ = [
     "AdminRolePermission",
     "AdminRefreshToken",
     "AdminPasswordReset",
+    "SupportTicket",
+    "SupportTicketMessage",
+    "Banner",
 ]

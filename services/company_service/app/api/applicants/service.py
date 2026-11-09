@@ -3,6 +3,7 @@
 # Purpose : Domain & persistence logic for ATS Applicant Management
 # ─────────────────────────────────────────────────────────────────────────────
 
+from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
@@ -13,6 +14,8 @@ from shared.utils.error_handler import service_error_handler
 from shared.utils.logger import get_logger
 from shared.utils.resume_storage import get_uploads_root
 from shared.utils.document_encryption import decrypt_document_data
+from shared.environment import env
+from shared.notifications import NotificationService
 
 logger = get_logger("company_applicants_service")
 
