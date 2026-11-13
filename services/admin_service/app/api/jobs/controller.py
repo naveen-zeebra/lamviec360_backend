@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from shared.models import User
 from shared.utils import log_audit_event
 from shared.utils.logger import get_logger
-from .schemas import JobModerationSchema
+from .schemas import JobModerationSchema, JobContentUpdateSchema
 from .service import (
     list_jobs,
     get_job_by_id,
@@ -18,6 +18,7 @@ from .service import (
     moderate_job_post,
     soft_delete_job_post,
     serialize_admin_job_detail,
+    update_job_content,
 )
 
 logger = get_logger("admin_jobs_controller")
@@ -127,3 +128,43 @@ def delete_job_controller(
         user_type=current_admin.user_type,
         request=request,
     )
+
+
+def update_job_content_controller(
+    db: Session,
+    job_id: int,
+    data: JobContentUpdateSchema,
+    current_admin: User,
+    request: Optional[Request] = None,
+) -> Dict[str, Any]:
+    """Sanitize and remove inappropriate content directly from a job posting per SAP-FR-005."""
+    job = get_job_by_id(db, job_id)
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job with ID {job_id} not found",
+        )
+
+    updated = update_job_content(
+        db=db,
+        job=job,
+        title=data.title,
+        description=data.description,
+        requirements=data.requirements,
+        benefits=data.benefits,
+        moderation_notes=data.moderation_notes,
+        admin_email=current_admin.email,
+    )
+
+    log_audit_event(
+        db,
+        action="SANITIZE_JOB_CONTENT",
+        module="ADMIN_JOBS",
+        description=f"Admin {current_admin.email} sanitized inappropriate content on job #{job.id} ('{updated.title}')",
+        user_id=current_admin.id,
+        user_email=current_admin.email,
+        user_type=current_admin.user_type,
+        request=request,
+    )
+
+    return serialize_admin_job_detail(updated)

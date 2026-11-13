@@ -11,6 +11,11 @@ class MasterDataItemCreate(BaseModel):
     value: str = Field(..., min_length=1, description="New master data item value to add")
 
 
+class MasterDataItemEdit(BaseModel):
+    old_value: str = Field(..., min_length=1, description="Existing master data item value to replace")
+    new_value: str = Field(..., min_length=1, description="New replacement value")
+
+
 class MasterDataCategoryUpdate(BaseModel):
     items: List[str] = Field(..., description="Complete replacement list for the category")
 

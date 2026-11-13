@@ -15,6 +15,7 @@ from .service import (
     add_master_item,
     remove_master_item,
     update_category_items,
+    edit_master_item,
 )
 
 logger = get_logger("admin_master_data_controller")
@@ -52,14 +53,19 @@ def add_item_controller(
 
     if current_admin:
         try:
-            log_audit_event(
-                action="create",
-                entity="master_data",
-                entity_id=category,
-                admin_id=current_admin.id,
-                details={"category": category, "added_item": value},
-                request=request,
-            )
+            from shared.database.session import SessionLocal
+            with SessionLocal() as db:
+                log_audit_event(
+                    db=db,
+                    action="CREATE",
+                    module="MASTER_DATA",
+                    description=f"Added '{value}' to master data category '{category}'",
+                    user_id=current_admin.id,
+                    user_email=current_admin.email,
+                    user_type="super_admin",
+                    details={"category": category, "added_item": value},
+                    request=request,
+                )
         except Exception as e:
             logger.warning("Audit log error on master data add: %s", e)
 
@@ -82,14 +88,19 @@ def remove_item_controller(
 
     if current_admin:
         try:
-            log_audit_event(
-                action="delete",
-                entity="master_data",
-                entity_id=category,
-                admin_id=current_admin.id,
-                details={"category": category, "removed_item": value},
-                request=request,
-            )
+            from shared.database.session import SessionLocal
+            with SessionLocal() as db:
+                log_audit_event(
+                    db=db,
+                    action="DELETE",
+                    module="MASTER_DATA",
+                    description=f"Removed '{value}' from master data category '{category}'",
+                    user_id=current_admin.id,
+                    user_email=current_admin.email,
+                    user_type="super_admin",
+                    details={"category": category, "removed_item": value},
+                    request=request,
+                )
         except Exception as e:
             logger.warning("Audit log error on master data remove: %s", e)
 
@@ -112,16 +123,58 @@ def update_category_controller(
 
     if current_admin:
         try:
-            log_audit_event(
-                action="update",
-                entity="master_data",
-                entity_id=category,
-                admin_id=current_admin.id,
-                details={"category": category, "count": len(items)},
-                request=request,
-            )
+            from shared.database.session import SessionLocal
+            with SessionLocal() as db:
+                log_audit_event(
+                    db=db,
+                    action="UPDATE",
+                    module="MASTER_DATA",
+                    description=f"Updated items in master data category '{category}'",
+                    user_id=current_admin.id,
+                    user_email=current_admin.email,
+                    user_type="super_admin",
+                    details={"category": category, "count": len(items)},
+                    request=request,
+                )
         except Exception as e:
             logger.warning("Audit log error on master data update: %s", e)
 
     return updated
+
+
+def edit_item_controller(
+    category: str,
+    old_value: str,
+    new_value: str,
+    current_admin: Optional[User] = None,
+    request: Optional[Request] = None,
+) -> List[str]:
+    """Edit / rename an existing item in the category."""
+    updated = edit_master_item(category, old_value, new_value)
+    if updated is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to edit item '{old_value}' in category '{category}'",
+        )
+
+    if current_admin:
+        try:
+            from shared.database.session import SessionLocal
+            with SessionLocal() as db:
+                log_audit_event(
+                    db=db,
+                    action="UPDATE",
+                    module="MASTER_DATA",
+                    description=f"Renamed '{old_value}' to '{new_value}' in master data category '{category}'",
+                    user_id=current_admin.id,
+                    user_email=current_admin.email,
+                    user_type="super_admin",
+                    details={"category": category, "old_value": old_value, "new_value": new_value},
+                    request=request,
+                )
+        except Exception as e:
+            logger.warning("Audit log error on master data edit: %s", e)
+
+    return updated
+
 

@@ -22,6 +22,7 @@ def register_routes(app: FastAPI) -> None:
     app.include_router(team_router, prefix=PREFIX)
     app.include_router(templates_router, prefix=PREFIX)
     app.include_router(data_retention_router, prefix=PREFIX)
+    app.include_router(master_data_router, prefix=PREFIX)
     app.include_router(master_data_router, prefix="/api/v1")
     # Support submission routes (accessible via /api/v1/company/support and /api/v1/support)
     app.include_router(support_router, prefix=PREFIX)

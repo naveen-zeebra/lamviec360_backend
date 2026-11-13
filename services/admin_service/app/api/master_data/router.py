@@ -12,6 +12,7 @@ from shared.utils import require_roles, success_response
 from .schemas import (
     MasterDataResponse,
     MasterDataItemCreate,
+    MasterDataItemEdit,
     MasterDataCategoryUpdate,
 )
 from .controller import (
@@ -20,6 +21,7 @@ from .controller import (
     add_item_controller,
     remove_item_controller,
     update_category_controller,
+    edit_item_controller,
 )
 
 router = APIRouter(prefix="/master-data", tags=["Platform Master Data"])
@@ -97,4 +99,26 @@ def update_master_data_category(
         data=updated,
         message=f"Category '{category}' updated successfully",
     )
+
+
+@router.put("/{category}/item", response_model=APIResponse[list])
+def edit_master_data_item(
+    category: str,
+    payload: MasterDataItemEdit,
+    request: Request,
+    current_admin: User = Depends(require_roles("super_admin", "admin")),
+):
+    """Edit / rename an existing option in a master data category (Super Admin / Admin only)."""
+    updated = edit_item_controller(
+        category=category,
+        old_value=payload.old_value,
+        new_value=payload.new_value,
+        current_admin=current_admin,
+        request=request,
+    )
+    return success_response(
+        data=updated,
+        message=f"Updated item '{payload.old_value}' to '{payload.new_value}' in '{category}'",
+    )
+
 

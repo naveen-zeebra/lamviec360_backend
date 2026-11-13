@@ -42,11 +42,21 @@ def serialize_admin_job_item(j: JobPosting) -> Dict[str, Any]:
         "company": {
             "id": j.company.id,
             "name": j.company.company_name,
+            "legal_name": j.company.legal_name,
+            "logo_url": j.company.logo_url,
+            "website": j.company.website,
+            "industry": j.company.industry,
+            "company_size": j.company.company_size,
+            "tax_code": j.company.tax_code,
             "verification_status": j.company.verification_status,
         } if j.company else None,
         "job_type": j.job_type,
         "workplace_type": j.workplace_type,
         "experience_level": j.experience_level,
+        "department": j.department,
+        "salary_type": j.salary_type,
+        "is_negotiable": j.is_negotiable,
+        "vacancies": j.vacancies,
         "city": j.city,
         "country": j.country,
         "salary_min": float(j.salary_min) if j.salary_min is not None else None,
@@ -120,8 +130,19 @@ def moderate_job_post(
 
     now = datetime.now(timezone.utc)
 
-    # Sync job status and reports based on moderation outcome
-    if moderation_status in ("approved", "dismissed"):
+    # Sync job status and reports based on moderation outcome per SAP-FR-005
+    if moderation_status == "verified":
+        job.moderation_status = "verified"
+        if job.status in ("closed", "draft", "flagged"):
+            job.status = "published"
+        if hasattr(job, "reports") and job.reports:
+            for r in job.reports:
+                if r.status == "pending":
+                    r.status = "dismissed"
+                    r.action_note = moderation_notes or "Marked as Verified genuine opportunity by Super Admin"
+                    r.actioned_by = admin_email
+                    r.actioned_at = now
+    elif moderation_status in ("approved", "dismissed"):
         job.moderation_status = "approved"
         if job.status in ("closed", "draft", "flagged"):
             job.status = "published"
@@ -132,7 +153,15 @@ def moderate_job_post(
                     r.action_note = moderation_notes or "Dismissed by admin"
                     r.actioned_by = admin_email
                     r.actioned_at = now
-    elif moderation_status in ("rejected", "actioned", "taken_down"):
+    elif moderation_status in ("suspicious", "flagged"):
+        job.moderation_status = "suspicious" if moderation_status == "suspicious" else "flagged"
+        if hasattr(job, "reports") and job.reports:
+            for r in job.reports:
+                if r.status == "pending":
+                    r.action_note = moderation_notes or f"Marked as {job.moderation_status} by Super Admin"
+                    r.actioned_by = admin_email
+                    r.actioned_at = now
+    elif moderation_status in ("rejected", "actioned", "taken_down", "removed"):
         job.moderation_status = "rejected"
         job.status = "closed"
         if hasattr(job, "reports") and job.reports:
@@ -142,12 +171,39 @@ def moderate_job_post(
                     r.action_note = moderation_notes or "Action taken: listing closed by admin"
                     r.actioned_by = admin_email
                     r.actioned_at = now
-    elif moderation_status == "flagged":
-        job.moderation_status = "flagged"
 
     db.commit()
     db.refresh(job)
     logger.info(f"Admin moderated job id={job.id} status={moderation_status}")
+    return job
+
+
+@service_error_handler
+def update_job_content(
+    db: Session,
+    job: JobPosting,
+    title: Optional[str] = None,
+    description: Optional[str] = None,
+    requirements: Optional[str] = None,
+    benefits: Optional[str] = None,
+    moderation_notes: Optional[str] = None,
+    admin_email: Optional[str] = None,
+) -> JobPosting:
+    """Sanitize and remove inappropriate content directly from a job posting per SAP-FR-005."""
+    if title is not None and title.strip():
+        job.title = title.strip()
+    if description is not None:
+        job.description = description
+    if requirements is not None:
+        job.requirements = requirements
+    if benefits is not None:
+        job.benefits = benefits
+    if moderation_notes is not None:
+        job.moderation_notes = moderation_notes
+
+    db.commit()
+    db.refresh(job)
+    logger.info(f"Admin sanitized inappropriate content on job id={job.id} by {admin_email}")
     return job
 
 

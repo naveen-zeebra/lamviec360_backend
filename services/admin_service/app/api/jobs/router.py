@@ -11,13 +11,14 @@ from shared.database.session import get_db
 from shared.models import User
 from shared.schemas import PaginatedResponse, APIResponse
 from shared.utils import require_roles, success_response, paginated_response
-from .schemas import JobModerationSchema
+from .schemas import JobModerationSchema, JobContentUpdateSchema
 from .controller import (
     list_jobs_controller,
     get_job_detail_controller,
     get_job_reports_controller,
     moderate_job_controller,
     delete_job_controller,
+    update_job_content_controller,
 )
 
 router = APIRouter(prefix="/jobs", tags=["Admin Job Moderation"])
@@ -81,7 +82,7 @@ def moderate_job(
     current_admin: User = Depends(require_roles("super_admin", "admin")),
     db: Session = Depends(get_db),
 ):
-    """Approve or reject a job posting."""
+    """Approve, verify, flag as suspicious, or reject a job posting per SAP-FR-005."""
     res = moderate_job_controller(
         db=db,
         job_id=job_id,
@@ -92,6 +93,28 @@ def moderate_job(
     return success_response(
         data=res,
         message=f"Job moderation status updated to {data.moderation_status}",
+    )
+
+
+@router.patch("/{job_id}/content", response_model=APIResponse[dict])
+def sanitize_job_content(
+    job_id: int,
+    data: JobContentUpdateSchema,
+    request: Request,
+    current_admin: User = Depends(require_roles("super_admin", "admin")),
+    db: Session = Depends(get_db),
+):
+    """Sanitize and remove inappropriate content directly from a job posting per SAP-FR-005."""
+    res = update_job_content_controller(
+        db=db,
+        job_id=job_id,
+        data=data,
+        current_admin=current_admin,
+        request=request,
+    )
+    return success_response(
+        data=res,
+        message="Inappropriate job content sanitized and updated successfully",
     )
 
 

@@ -16,7 +16,7 @@ logger = get_logger("admin_master_data_service")
 DATA_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../../shared/data"))
 STORAGE_FILE = os.path.join(DATA_DIR, "master_data.json")
 
-_lock = threading.Lock()
+_lock = threading.RLock()
 
 DEFAULT_MASTER_DATA: Dict[str, List[str]] = {
     "jobTypes": [
@@ -176,4 +176,26 @@ def update_category_items(category: str, new_items: List[str]) -> Optional[List[
         with open(STORAGE_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
         return clean_items
+
+
+@service_error_handler
+def edit_master_item(category: str, old_value: str, new_value: str) -> Optional[List[str]]:
+    """Update / rename an existing item in a category."""
+    canonical = _normalize_category(category)
+    if not canonical or not old_value or not new_value or not new_value.strip():
+        return None
+
+    clean_old = old_value.strip()
+    clean_new = new_value.strip()
+    with _lock:
+        data = get_all_master_data()
+        items = data.get(canonical, [])
+        if clean_old in items:
+            idx = items.index(clean_old)
+            items[idx] = clean_new
+            data[canonical] = items
+            with open(STORAGE_FILE, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+        return items
+
 
